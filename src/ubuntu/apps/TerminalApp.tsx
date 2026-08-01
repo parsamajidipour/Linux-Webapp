@@ -52,12 +52,15 @@ export function TerminalApp() {
 
   const print = (newLines: Line[]) => setLines((prev) => [...prev, ...newLines])
 
-  const runCommand = async (raw: string) => {
+  const promptLineFor = (raw: string): string => {
     const home = kernel.users.findByName(shellCtx?.currentUser ?? CURRENT_USER)?.home ?? '/root'
-    const prompt = shellCtx
+    return shellCtx
       ? `${shellCtx.currentUser}@${kernel.vfs.readFile('/etc/hostname').trim()}:${formatCwd(shellCtx.cwd, home)}$ ${raw}`
       : `$ ${raw}`
-    print([{ text: prompt, cls: 'text-[#8eef97]' }])
+  }
+
+  const runCommand = async (raw: string) => {
+    print([{ text: promptLineFor(raw), cls: 'text-[#8eef97]' }])
 
     const cmdline = raw.trim()
     if (!cmdline) return
@@ -99,8 +102,77 @@ export function TerminalApp() {
     print(out)
   }
 
+  const longestCommonPrefix = (words: string[]): string => {
+    if (!words.length) return ''
+    let prefix = words[0]
+    for (const w of words.slice(1)) {
+      while (!w.startsWith(prefix)) prefix = prefix.slice(0, -1)
+    }
+    return prefix
+  }
+
+  // Real Tab completion against the live VFS/command registry — not a hardcoded list.
+  // Approximation: completes the token at the end of the input, ignoring cursor position
+  // and quoting (good enough for a terminal simulator, matches real bash for the common case).
+  const handleTabComplete = () => {
+    if (!shellCtx) return
+    const m = /(\S*)$/.exec(input)
+    const partial = m ? m[1] : ''
+    const beforeWord = input.slice(0, input.length - partial.length)
+    const isFirstWord = beforeWord.trim() === ''
+
+    let matches: string[]
+    let dirPart = ''
+    let isDirMatch: (name: string) => boolean = () => false
+
+    if (isFirstWord) {
+      matches = kernel.registry.list().filter((c) => c.startsWith(partial))
+    } else {
+      const lastSlash = partial.lastIndexOf('/')
+      dirPart = lastSlash === -1 ? '' : partial.slice(0, lastSlash + 1)
+      const prefix = lastSlash === -1 ? partial : partial.slice(lastSlash + 1)
+      const dirInput = lastSlash === -1 ? '.' : partial.slice(0, lastSlash) || '/'
+      const home = kernel.users.findByName(shellCtx.currentUser)?.home ?? '/root'
+      const dirAbs = kernel.vfs.resolve(dirInput, shellCtx.cwd, home)
+      let entries: string[] = []
+      try {
+        entries = kernel.vfs.list(dirAbs)
+      } catch {
+        entries = []
+      }
+      matches = entries.filter((e) => e.startsWith(prefix))
+      isDirMatch = (name: string) => kernel.vfs.stat(`${dirAbs === '/' ? '' : dirAbs}/${name}`)?.type === 'dir'
+    }
+
+    if (matches.length === 0) return
+
+    if (matches.length === 1) {
+      const [match] = matches
+      const suffix = !isFirstWord && isDirMatch(match) ? '/' : ' '
+      setInput(beforeWord + dirPart + match + suffix)
+      return
+    }
+
+    const lcp = longestCommonPrefix(matches)
+    const currentPrefix = isFirstWord ? partial : partial.slice(partial.lastIndexOf('/') + 1)
+    if (lcp.length > currentPrefix.length) {
+      setInput(beforeWord + dirPart + lcp)
+      return
+    }
+
+    print([{ text: matches.join('  '), cls: 'text-neutral-400' }])
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      handleTabComplete()
+    } else if (e.key === 'c' && e.ctrlKey) {
+      e.preventDefault()
+      print([{ text: `${promptLineFor(input)}^C`, cls: 'text-[#8eef97]' }])
+      setInput('')
+      setHistIdx(-1)
+    } else if (e.key === 'Enter') {
       const value = input
       setInput('')
       setHistIdx(-1)

@@ -16,6 +16,8 @@ export interface ShellContext {
   currentUser: string
   /** Mutable — `cd` updates this directly. */
   cwd: string
+  /** Mutable — `pushd`/`popd` update this directly. Does not include `cwd` itself. */
+  dirStack: string[]
   /** Mutable — `export` updates this directly. `$?` is kept here too. */
   env: Record<string, string>
 }

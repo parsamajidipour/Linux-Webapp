@@ -29,6 +29,7 @@ function makeFile(name: string, owner: string, group: string, content = '', mode
 export class Vfs {
   private root: DirInode
   private persistence?: PersistenceAdapter
+  private dynamicProviders = new Map<string, () => string>()
 
   constructor(persistence?: PersistenceAdapter) {
     this.persistence = persistence

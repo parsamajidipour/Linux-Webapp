@@ -8,9 +8,9 @@
 
 > آخرین به‌روزرسانی: 2026-08-01
 
-- **مرحله‌ی فعلی:** ✅ **فاز ۰ (هسته‌ی معماری) تکمیل شد.** کد در `src/os/` — مستقل از React، ۴۳ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
-- **قدم بعدی:** **فاز ۳ — فایل‌سیستم واقعی**: بسط seed فعلی (`src/os/seed.ts`) به درخت کامل `/bin /etc /proc /var /usr ...` طبق چک‌لیست فاز۳ در پایین این فایل.
-- **نکته‌ی مهم:** فاز ۰ فقط **هسته** رو ساخته، هنوز به UI موجود (Terminal/Files/Login و...) وصل نشده — `KernelProvider` روی `Ubuntu.tsx` mount شده و boot می‌شه ولی هیچ کامپوننتی ازش استفاده نمی‌کنه. وصل‌کردن UI به کرنل کار فازهای ۱، ۴ و ۵ هست.
+- **مرحله‌ی فعلی:** ✅ **فاز ۰ (هسته‌ی معماری)** و ✅ **فاز ۳ (فایل‌سیستم واقعی)** تکمیل شدن. کد در `src/os/` — مستقل از React، ۵۶ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
+- **قدم بعدی:** **فاز ۴ — ترمینال/Bash کامل**: از ~۱۲ دستور seed‌شده‌ی فعلی (`shell/commands/basic.ts`) به سمت لیست کامل ~۷۰ دستوری فاز۴ (زیرمرحله‌های ۴.۱ تا ۴.۱۳ پایین همین فایل) بریم جلو.
+- **نکته‌ی مهم:** هنوز **هیچ‌کدوم از این‌ها به UI موجود وصل نشدن** — `TerminalApp.tsx` فعلی هنوز همون فایل‌سیستم فیک تک‌فایلی قدیمی خودش رو داره، نه کرنل جدید. `KernelProvider` روی `Ubuntu.tsx` mount شده و silently boot می‌شه ولی هیچ کامپوننتی مصرفش نمی‌کنه. وصل‌کردن UI به کرنل (Terminal/Files/Login) کار فازهای ۱، ۴ و ۵ هست — به‌عمد به تعویق افتاده تا کرنل کامل و تست‌شده باشه (تصمیمی که با کاربر هماهنگ شد: 2026-08-01).
 
 ---
 
@@ -76,14 +76,18 @@
 
 ---
 
-## فاز ۳ — فایل‌سیستم واقعی (روی هسته‌ی فاز ۰)
+## فاز ۳ — فایل‌سیستم واقعی (روی هسته‌ی فاز ۰) ✅ تکمیل‌شده (2026-08-01)
 
-- [ ] Seed کردن VFS با درخت کامل ریشه: `/bin /boot /dev /etc /home /lib /lib64 /media /mnt /opt /proc /root /run /sbin /srv /sys /tmp /usr /var`
-- [ ] `/home/bitx/`: Desktop, Documents, Downloads, Music, Pictures, Videos, Projects, Notes, Public, Templates, `.ssh`, `.config`, `.local`, `.cache`, `.bashrc`, `.profile` (با محتوای seed معقول، نه خالی)
-- [ ] `/etc/`: `passwd, shadow, group, hostname, hosts, resolv.conf, fstab, os-release, issue, sudoers` + پوشه‌های `ssh/, systemd/, nginx/` (این‌ها باید از همون User System فاز ۰ خونده بشن، نه متن ثابت)
-- [ ] `/var/log/`: `auth.log, syslog, kern.log` (که Service Manager فاز ۰ واقعاً بهشون بنویسه، نه fake متن استاتیک)، `nginx/, apache2/, journal/`
-- [ ] `/proc/`: `cpuinfo, meminfo, uptime, version, mounts` — این‌ها باید **مقادیر پویا** برگردونن (مثلاً uptime واقعاً بگذره)
-- [ ] `/usr/`: `bin, share, local` — `bin` باید با Package Database فاز ۰ sync باشه (نصب پکیج = فایل جدید اینجا)
+پیاده‌سازی در `src/os/fs/` (`seedRoot.ts`, `etcFiles.ts`, `procFiles.ts`).
+
+- [x] Seed کردن VFS با درخت کامل ریشه: `/bin /boot /dev /etc /home /lib /lib64 /media /mnt /opt /proc /root /run /sbin /srv /sys /tmp /usr /var`
+- [x] `/home/bitx/`: Desktop, Documents, Downloads, Music, Pictures, Videos, Projects, Notes, Public, Templates, `.ssh`(0700)، `.config`, `.local`, `.cache`, `.bashrc`, `.profile`. (`root` عمداً این ساب‌دایرکتوری‌های دسکتاپی رو نداره — واقعی‌تره)
+- [x] `/etc/`: `passwd, shadow(0600), group, hostname, hosts, resolv.conf, fstab, os-release, issue, sudoers(0440)` + `ssh/sshd_config, systemd/, nginx/`. **`passwd`/`shadow`/`group` واقعاً از `UserStore.list()`/`listGroups()` رندر می‌شن** (`etcFiles.ts`) — نه متن ثابت؛ تست دارم که وقتی یه یوزر جدید اضافه می‌کنی، تو `/etc/passwd` بعدی ظاهر می‌شه.
+- [x] `/var/log/`: `auth.log, syslog, kern.log` + `nginx/, apache2/, journal/`. `ServiceManager` موقع بوت واقعاً رو `syslog` می‌نویسه.
+- [x] `/proc/`: `cpuinfo, version, mounts` (استاتیک، مثل لینوکس واقعی) + `uptime, meminfo` که **واقعاً پویا هستن** — از طریق `Vfs.registerDynamic()` (قابلیت جدیدی که به VFS اضافه شد: بعضی مسیرها موقع هر `readFile` محتوا رو زنده محاسبه می‌کنن، نه از inode استاتیک). تست دارم که `uptime` بین دو خوندن با فاصله‌ی زمانی واقعاً بیشتر می‌شه.
+- [x] `/usr/`: `bin, share, local` — `bin` از روی `PackageManager.list()` در لحظه‌ی boot پر می‌شه (مثلاً `bash`, `apt`, `sshd`).
+
+**محدودیت آگاهانه:** sync بین `/usr/bin` و پکیج‌ها فقط **موقع seed اولیه** انجام می‌شه؛ وقتی دستور `apt install` واقعی تو فاز ۴ پیاده بشه، باید همون‌جا هم `vfs.writeFile('/usr/bin/...')` صدا بزنه تا نصب زنده هم sync بمونه (یادداشت گذاشتم، فراموش نمی‌کنم).
 
 ---
 
@@ -169,3 +173,5 @@
 
 - **2026-08-01:** پروژه Dockerize شد (multi-stage build + nginx، مشکل رجیستری خصوصی در `package-lock.json` حل شد). این فایل پلن ساخته شد؛ هنوز هیچ کدی از فازهای بالا نوشته نشده.
 - **2026-08-01:** فاز ۰ (هسته‌ی معماری) کامل پیاده‌سازی شد در `src/os/` — VFS، User/Permission، Process، Package، Service، Settings، Bash Parser، Command Registry، Shell، Kernel، KernelProvider. `vitest` اضافه شد (۴۳ تست، همه پاس). `tsc -b`، `vite build`، و بیلد/اجرای داکر هم تأیید شدن که چیزی نشکسته. قدم بعدی فاز ۳ (فایل‌سیستم واقعی) هست.
+- **2026-08-01:** کاربر بعد از دیدن لوکال‌هاست متوجه شد فاز ۰ چیزی از نظر ظاهری تغییر نمی‌ده (چون کاملاً نامرئیه — فقط موتور پشت‌صحنه‌ست). بین سه گزینه («وصل کردن سریع ترمینال»، «چک با DevTools»، «صبر و ادامه‌ی ترتیب پلن») گزینه‌ی سوم رو انتخاب کرد؛ یعنی وصل‌شدن UI به کرنل عمداً به فازهای ۱/۴/۵ موکول می‌مونه.
+- **2026-08-01:** فاز ۳ (فایل‌سیستم واقعی) کامل شد در `src/os/fs/` — درخت کامل ریشه، `/etc/passwd|shadow|group` از UserStore رندر می‌شن، `/var/log` واقعی، `/proc/uptime` و `/proc/meminfo` از طریق قابلیت جدید `Vfs.registerDynamic()` واقعاً زنده‌ن، `/usr/bin` از PackageManager پر می‌شه. ۱۳ تست جدید (جمعاً ۵۶ تست) پاس؛ `tsc -b`، build، و داکر هم تأیید شدن. قدم بعدی فاز ۴ (ترمینال کامل، ~۷۰ دستور) هست.

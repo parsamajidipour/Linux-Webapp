@@ -18,6 +18,18 @@ describe('Kernel (phase 0 integration)', () => {
     expect(syslog).toContain('NetworkManager')
   })
 
+  it('serves a live /proc/uptime that actually advances', async () => {
+    const first = kernel.vfs.readFile('/proc/uptime')
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+    const second = kernel.vfs.readFile('/proc/uptime')
+    expect(Number(second.split(' ')[0])).toBeGreaterThan(Number(first.split(' ')[0]))
+  })
+
+  it('reads the full root tree through the shell, not just the kernel API', async () => {
+    const result = await kernel.shell.run('cat /etc/os-release', ctx)
+    expect(result.stdout).toContain('Ubuntu')
+  })
+
   it('runs the phase-0 smoke test from PLAN.md: mkdir && ls', async () => {
     const result = await kernel.shell.run('mkdir /home/bitx/test && ls /home/bitx', ctx)
     expect(result.exitCode).toBe(0)

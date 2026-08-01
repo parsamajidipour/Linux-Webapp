@@ -1,7 +1,8 @@
+import { seedRootFilesystem } from './fs/seedRoot'
+import { renderProcMeminfo, renderProcUptime } from './fs/procFiles'
 import { PackageManager } from './packages/PackageManager'
 import type { PersistenceAdapter } from './persistence/PersistenceAdapter'
 import { ProcessManager } from './process/ProcessManager'
-import { seedMinimalTree } from './seed'
 import { ServiceManager } from './services/ServiceManager'
 import { registerBasicCommands } from './shell/commands/basic'
 import { CommandRegistry } from './shell/registry'
@@ -47,7 +48,10 @@ export class Kernel {
 
   async boot(): Promise<void> {
     await Promise.all([this.vfs.load(), this.users.load(), this.packages.load(), this.settings.load()])
-    seedMinimalTree(this.vfs, this.users)
+    seedRootFilesystem(this.vfs, this.users, this.packages)
+
+    this.vfs.registerDynamic('/proc/uptime', () => renderProcUptime(this.processes.uptimeSeconds()))
+    this.vfs.registerDynamic('/proc/meminfo', () => renderProcMeminfo())
 
     for (const svc of this.services.list()) {
       if (svc.status === 'active') this.services.log(this.vfs, `${svc.name}[1]: Started ${svc.description}.`)

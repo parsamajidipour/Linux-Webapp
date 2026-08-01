@@ -1,7 +1,7 @@
 import { globToRegExp } from '../glob'
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type ShellContext } from '../types'
-import { homeOf } from './util'
+import { flagChars, homeOf } from './util'
 
 function walkAll(ctx: ShellContext, absPath: string, out: string[]): void {
   const node = ctx.vfs.stat(absPath)
@@ -88,7 +88,7 @@ export function registerSearchCommands(registry: CommandRegistry): void {
   registry.register('grep', (args, _ctx, stdin) => {
     const pattern = args.find((a) => !a.startsWith('-'))
     if (!pattern) return fail('usage: grep [-i] pattern')
-    const ignoreCase = args.includes('-i')
+    const ignoreCase = flagChars(args).includes('i')
 
     let re: RegExp
     try {

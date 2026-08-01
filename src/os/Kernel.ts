@@ -13,6 +13,7 @@ import { registerPackageCommands } from './shell/commands/packages'
 import { registerPermissionCommands } from './shell/commands/permissions'
 import { registerProcessCommands } from './shell/commands/process'
 import { registerSearchCommands } from './shell/commands/search'
+import { registerSystemCommands } from './shell/commands/system'
 import { registerUserCommands } from './shell/commands/user'
 import { CommandRegistry } from './shell/registry'
 import { Shell } from './shell/Shell'
@@ -60,6 +61,7 @@ export class Kernel {
     registerNetworkCommands(this.registry)
     registerPackageCommands(this.registry)
     registerDiskCommands(this.registry)
+    registerSystemCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }
@@ -96,6 +98,7 @@ export class Kernel {
       cwd: home,
       dirStack: [],
       jobs: [],
+      aliases: {},
       env: {
         HOME: home,
         USER: username,

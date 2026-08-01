@@ -12,6 +12,8 @@ export class Shell {
   }
 
   async run(line: string, ctx: ShellContext): Promise<CommandResult> {
+    this.recordHistory(line, ctx)
+
     const statements = parseLine(tokenize(line))
     let last: CommandResult = ok()
 
@@ -39,6 +41,32 @@ export class Shell {
     return last
   }
 
+  /** Real bash persists every entered line to `~/.bash_history` — we get that for free by
+   * writing through the same VFS everything else uses, so it survives a page reload too. */
+  private recordHistory(line: string, ctx: ShellContext): void {
+    if (!line.trim()) return
+    const home = ctx.users.findByName(ctx.currentUser)?.home ?? '/root'
+    try {
+      ctx.vfs.writeFile(`${home}/.bash_history`, `${line}\n`, {
+        append: true,
+        actor: ctx.users.toSubject(ctx.currentUser),
+      })
+    } catch {
+      // home directory not seeded yet (e.g. very first boot tick) — safe to skip.
+    }
+  }
+
+  private expandAlias(words: string[], ctx: ShellContext): string[] {
+    const seen = new Set<string>()
+    let current = words
+    while (current.length && ctx.aliases[current[0]] && !seen.has(current[0])) {
+      seen.add(current[0])
+      const expansion = this.expandWords(tokenize(ctx.aliases[current[0]]), ctx)
+      current = [...expansion, ...current.slice(1)]
+    }
+    return current
+  }
+
   private async runStatement(stmt: Statement, ctx: ShellContext): Promise<CommandResult> {
     let stdin = ''
     let result: CommandResult = ok()
@@ -46,6 +74,7 @@ export class Shell {
     for (const cmdTokens of stmt.commands) {
       let words = this.expandWords(cmdTokens, ctx)
       if (words.length === 0) continue
+      words = this.expandAlias(words, ctx)
 
       // `sudo` isn't a registered command — like real sudo, it elevates for one invocation
       // only (the process re-execs as root), it's not a shell builtin.

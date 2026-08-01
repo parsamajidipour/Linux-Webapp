@@ -2,7 +2,7 @@ import { formatMode } from '../../permissions'
 import { DEFAULT_DIR_MODE, DEFAULT_FILE_MODE } from '../../vfs/types'
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type CommandResult, type ShellContext } from '../types'
-import { errMsg, homeOf, modeWithUmask } from './util'
+import { errMsg, flagChars, homeOf, modeWithUmask } from './util'
 
 function readTarget(ctx: ShellContext, target: string): string {
   const abs = ctx.vfs.resolve(target, ctx.cwd, homeOf(ctx))
@@ -49,8 +49,8 @@ function dumpFile(args: string[], ctx: ShellContext, stdin: string): CommandResu
 export function registerFileCommands(registry: CommandRegistry): void {
   registry.register('mkdir', (args, ctx) => {
     const home = homeOf(ctx)
-    const parents = args.includes('-p')
-    const targets = args.filter((a) => a !== '-p')
+    const parents = flagChars(args).includes('p')
+    const targets = args.filter((a) => !a.startsWith('-'))
     if (!targets.length) return fail('mkdir: missing operand')
 
     const actor = ctx.users.toSubject(ctx.currentUser)
@@ -165,7 +165,7 @@ export function registerFileCommands(registry: CommandRegistry): void {
 
   registry.register('ln', (args, ctx) => {
     const home = homeOf(ctx)
-    const symbolic = args.includes('-s')
+    const symbolic = flagChars(args).includes('s')
     const paths = args.filter((a) => !a.startsWith('-'))
     if (paths.length < 2) return fail('ln: missing file operand')
     if (!symbolic) return fail('ln: hard links are not supported in this simulated filesystem — use -s')

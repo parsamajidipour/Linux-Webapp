@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../registry'
 import { fail, ok } from '../types'
-import { errMsg, homeOf } from './util'
+import { errMsg, flagChars, homeOf } from './util'
 
 /** Applies one `chmod`-style symbolic clause (e.g. `u+x`, `go-w`, `a=r`) to a mode. Returns null if unparseable. */
 function applySymbolicClause(mode: number, clause: string): number | null {
@@ -41,8 +41,8 @@ function parseMode(spec: string, currentMode: number): number | null {
 export function registerPermissionCommands(registry: CommandRegistry): void {
   registry.register('chmod', (args, ctx) => {
     const home = homeOf(ctx)
-    const recursive = args.includes('-R')
-    const [modeSpec, ...targets] = args.filter((a) => a !== '-R')
+    const recursive = flagChars(args).includes('R')
+    const [modeSpec, ...targets] = args.filter((a) => !a.startsWith('-'))
     if (!modeSpec || !targets.length) return fail('usage: chmod MODE FILE...')
 
     const actor = ctx.users.toSubject(ctx.currentUser)

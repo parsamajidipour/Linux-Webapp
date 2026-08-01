@@ -26,12 +26,25 @@ export function TerminalApp() {
     { text: '', cls: '' },
   ])
   const [input, setInput] = useState('')
-  const [history, setHistory] = useState<string[]>([])
+  const [sessionHistory, setSessionHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
   const shellCtx = useMemo<ShellContext | null>(() => (ready ? kernel.createContext(CURRENT_USER) : null), [ready, kernel])
   const [, bump] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // ~/.bash_history is written by Shell.run() through the same VFS everything else uses, so
+  // it survives a page reload — read it once (pure, synchronous) to seed arrow-key recall.
+  const loadedHistory = useMemo<string[]>(() => {
+    if (!shellCtx) return []
+    const home = kernel.users.findByName(shellCtx.currentUser)?.home ?? '/root'
+    try {
+      return kernel.vfs.readFile(`${home}/.bash_history`).split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }, [shellCtx, kernel])
+  const history = useMemo(() => [...loadedHistory, ...sessionHistory], [loadedHistory, sessionHistory])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'auto' })
@@ -91,7 +104,7 @@ export function TerminalApp() {
       const value = input
       setInput('')
       setHistIdx(-1)
-      if (value.trim()) setHistory((h) => [...h, value])
+      if (value.trim()) setSessionHistory((h) => [...h, value])
       void runCommand(value)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()

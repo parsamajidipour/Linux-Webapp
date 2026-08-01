@@ -1,7 +1,7 @@
 import { djb2Hash } from '../../hash'
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type ShellContext } from '../types'
-import { errMsg, homeOf } from './util'
+import { errMsg, flagChars, homeOf } from './util'
 
 /** No real network exists here — every "lookup" below is a deterministic function of the
  * hostname (same input always gives the same fake answer), checked against /etc/hosts first
@@ -89,8 +89,9 @@ export function registerNetworkCommands(registry: CommandRegistry): void {
   })
 
   registry.register('curl', (args, ctx) => {
-    const headOnly = args.includes('-I') || args.includes('--head')
-    const silent = args.includes('-s') || args.includes('--silent')
+    const flags = flagChars(args)
+    const headOnly = flags.includes('I') || args.includes('--head')
+    const silent = flags.includes('s') || args.includes('--silent')
     const url = args.find((a) => !a.startsWith('-'))
     if (!url) return fail('usage: curl [-I] [-s] URL')
 

@@ -25,6 +25,8 @@ export interface ShellContext {
   env: Record<string, string>
   /** Mutable — background (`cmd &`) jobs for this session; `jobs`/`bg`/`fg` read/pop from it. */
   jobs: Job[]
+  /** Mutable — `alias`/`unalias` update this directly; the Shell expands the first word against it. */
+  aliases: Record<string, string>
 }
 
 export interface CommandResult {

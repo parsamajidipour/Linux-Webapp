@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type ShellContext } from '../types'
-import { homeOf } from './util'
+import { flagChars, homeOf } from './util'
 
 /** No real block devices exist — one fake 20G root disk and a 2G tmpfs, sized consistently
  * across df/lsblk. Usage numbers are NOT fake, though: they come from `Vfs.sizeOf()`. */
@@ -35,7 +35,7 @@ function collectDu(ctx: ShellContext, absPath: string, human: boolean, lines: st
 /** PLAN.md phase 4.9 — Disk: df, du, mount, umount, lsblk. */
 export function registerDiskCommands(registry: CommandRegistry): void {
   registry.register('df', (args, ctx) => {
-    const human = args.includes('-h')
+    const human = flagChars(args).includes('h')
     const rows = [
       { fs: '/dev/sda1', total: TOTAL_DISK_BYTES, used: ctx.vfs.sizeOf('/'), mount: '/' },
       { fs: 'tmpfs', total: TMPFS_BYTES, used: ctx.vfs.exists('/tmp') ? ctx.vfs.sizeOf('/tmp') : 0, mount: '/tmp' },
@@ -55,8 +55,9 @@ export function registerDiskCommands(registry: CommandRegistry): void {
   })
 
   registry.register('du', (args, ctx) => {
-    const human = args.includes('-h')
-    const summary = args.includes('-s')
+    const flags = flagChars(args)
+    const human = flags.includes('h')
+    const summary = flags.includes('s')
     const home = homeOf(ctx)
     const target = args.find((a) => !a.startsWith('-')) ?? '.'
     const abs = ctx.vfs.resolve(target, ctx.cwd, home)

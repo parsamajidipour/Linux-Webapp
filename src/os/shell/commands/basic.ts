@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../registry'
 import { fail, ok } from '../types'
+import { flagChars } from './util'
 
 /**
  * Cross-phase seed commands not yet organized under their own PLAN.md sub-phase file:
@@ -25,9 +26,10 @@ export function registerBasicCommands(registry: CommandRegistry): void {
     const wordCount = stdin.split(/\s+/).filter(Boolean).length
     const charCount = stdin.length
 
-    if (args.includes('-l')) return ok(String(lineCount))
-    if (args.includes('-w')) return ok(String(wordCount))
-    if (args.includes('-c')) return ok(String(charCount))
+    const flags = flagChars(args)
+    if (flags.includes('l')) return ok(String(lineCount))
+    if (flags.includes('w')) return ok(String(wordCount))
+    if (flags.includes('c')) return ok(String(charCount))
     return ok(`${lineCount} ${wordCount} ${charCount}`)
   })
 

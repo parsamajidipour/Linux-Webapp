@@ -5,6 +5,8 @@ import type { PersistenceAdapter } from './persistence/PersistenceAdapter'
 import { ProcessManager } from './process/ProcessManager'
 import { ServiceManager } from './services/ServiceManager'
 import { registerBasicCommands } from './shell/commands/basic'
+import { registerFileCommands } from './shell/commands/fileOps'
+import { registerNavigationCommands } from './shell/commands/navigation'
 import { CommandRegistry } from './shell/registry'
 import { Shell } from './shell/Shell'
 import type { ShellContext } from './shell/types'
@@ -42,6 +44,8 @@ export class Kernel {
     this.settings = new SettingsStore(persistence.settings)
 
     this.registry = new CommandRegistry()
+    registerNavigationCommands(this.registry)
+    registerFileCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }
@@ -75,6 +79,7 @@ export class Kernel {
       settings: this.settings,
       currentUser: username,
       cwd: home,
+      dirStack: [],
       env: {
         HOME: home,
         USER: username,

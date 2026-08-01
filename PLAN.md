@@ -8,8 +8,8 @@
 
 > آخرین به‌روزرسانی: 2026-08-01
 
-- **مرحله‌ی فعلی:** ✅ **فاز ۰ (هسته‌ی معماری)** و ✅ **فاز ۳ (فایل‌سیستم واقعی)** تکمیل شدن. کد در `src/os/` — مستقل از React، ۵۶ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
-- **قدم بعدی:** **فاز ۴ — ترمینال/Bash کامل**: از ~۱۲ دستور seed‌شده‌ی فعلی (`shell/commands/basic.ts`) به سمت لیست کامل ~۷۰ دستوری فاز۴ (زیرمرحله‌های ۴.۱ تا ۴.۱۳ پایین همین فایل) بریم جلو.
+- **مرحله‌ی فعلی:** فاز ۰ و فاز ۳ تکمیل. از فاز ۴ (ترمینال/Bash)، زیرمرحله‌های **۴.۱ (Navigation)** و **۴.۲ (File ops)** هم تکمیل شدن. کد در `src/os/` — ۶۹ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
+- **قدم بعدی:** فاز ۴.۳ + ۴.۴ — **Search + Permission**: `find, locate, grep(از قبل بخشی هست), which, whereis, type` و `chmod, chown, chgrp, umask` (باید واقعاً رو VFS اثر بذارن — که VFS از فاز۰ همین الانشم پشتیبانی می‌کنه، فقط دستور شل کمه).
 - **نکته‌ی مهم:** هنوز **هیچ‌کدوم از این‌ها به UI موجود وصل نشدن** — `TerminalApp.tsx` فعلی هنوز همون فایل‌سیستم فیک تک‌فایلی قدیمی خودش رو داره، نه کرنل جدید. `KernelProvider` روی `Ubuntu.tsx` mount شده و silently boot می‌شه ولی هیچ کامپوننتی مصرفش نمی‌کنه. وصل‌کردن UI به کرنل (Terminal/Files/Login) کار فازهای ۱، ۴ و ۵ هست — به‌عمد به تعویق افتاده تا کرنل کامل و تست‌شده باشه (تصمیمی که با کاربر هماهنگ شد: 2026-08-01).
 
 ---
@@ -95,8 +95,8 @@
 
 به خاطر حجم بالا، به زیرمرحله تقسیم می‌کنم — هر زیرمرحله چند دستور که با هم منطقی مرتبطن:
 
-- [ ] **۴‌.۱ Navigation:** `pwd, ls, ls -la, tree, cd, pushd, popd`
-- [ ] **۴.۲ File ops:** `touch, mkdir, rmdir, rm, cp, mv, ln, cat, less, head, tail, file, stat`
+- [x] **۴‌.۱ Navigation:** `pwd, ls, ls -la, tree, cd, pushd, popd` — `shell/commands/navigation.ts`
+- [x] **۴.۲ File ops:** `touch, mkdir, rmdir, rm, cp, mv, ln, cat, less, head, tail, file, stat` — `shell/commands/fileOps.ts`. `ln -s` کار می‌کنه (symlink واقعی به VFS اضافه شد)؛ `ln` بدون `-s` (hard link) عمداً رد می‌شه چون VFS ما مفهوم inode مشترک نداره — به‌جای رفتار غلط، پیغام صریح می‌ده.
 - [ ] **۴.۳ Search:** `find, locate, grep, which, whereis, type`
 - [ ] **۴.۴ Permission:** `chmod, chown, chgrp, umask` (واقعاً روی VFS اثر بذاره)
 - [ ] **۴.۵ User:** `whoami, id, groups, passwd, sudo, su` (وصل به User System)
@@ -175,3 +175,4 @@
 - **2026-08-01:** فاز ۰ (هسته‌ی معماری) کامل پیاده‌سازی شد در `src/os/` — VFS، User/Permission، Process، Package، Service، Settings، Bash Parser، Command Registry، Shell، Kernel، KernelProvider. `vitest` اضافه شد (۴۳ تست، همه پاس). `tsc -b`، `vite build`، و بیلد/اجرای داکر هم تأیید شدن که چیزی نشکسته. قدم بعدی فاز ۳ (فایل‌سیستم واقعی) هست.
 - **2026-08-01:** کاربر بعد از دیدن لوکال‌هاست متوجه شد فاز ۰ چیزی از نظر ظاهری تغییر نمی‌ده (چون کاملاً نامرئیه — فقط موتور پشت‌صحنه‌ست). بین سه گزینه («وصل کردن سریع ترمینال»، «چک با DevTools»، «صبر و ادامه‌ی ترتیب پلن») گزینه‌ی سوم رو انتخاب کرد؛ یعنی وصل‌شدن UI به کرنل عمداً به فازهای ۱/۴/۵ موکول می‌مونه.
 - **2026-08-01:** فاز ۳ (فایل‌سیستم واقعی) کامل شد در `src/os/fs/` — درخت کامل ریشه، `/etc/passwd|shadow|group` از UserStore رندر می‌شن، `/var/log` واقعی، `/proc/uptime` و `/proc/meminfo` از طریق قابلیت جدید `Vfs.registerDynamic()` واقعاً زنده‌ن، `/usr/bin` از PackageManager پر می‌شه. ۱۳ تست جدید (جمعاً ۵۶ تست) پاس؛ `tsc -b`، build، و داکر هم تأیید شدن. قدم بعدی فاز ۴ (ترمینال کامل، ~۷۰ دستور) هست.
+- **2026-08-01:** فاز ۴.۱ (Navigation) و ۴.۲ (File ops) پیاده شدن — `shell/commands/navigation.ts` (`pwd cd ls tree pushd popd`) و `shell/commands/fileOps.ts` (`touch mkdir rmdir rm cp mv ln cat less head tail file stat`). به این مناسبت به VFS متد `symlink()` و به ShellContext فیلد `dirStack` اضافه شد. `basic.ts` تریم شد (فقط echo/whoami/id/grep/wc/true/false موندن، چون مال زیرمرحله‌های بعدی‌ان). ۱۳ تست جدید (جمعاً ۶۹ تست) پاس؛ `tsc -b`، build، داکر هم تأیید شدن. قدم بعدی ۴.۳+۴.۴ (Search + Permission) هست.

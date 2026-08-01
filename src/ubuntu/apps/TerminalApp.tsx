@@ -1,123 +1,35 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useDesktop } from '../context/DesktopContext'
+import { useKernel } from '../../os/context/KernelContext'
+import type { ShellContext } from '../../os/shell/types'
 
 interface Line {
   text: string
   cls?: string
-  html?: string
 }
 
-type FsNode = { [key: string]: FsNode | string }
+const CURRENT_USER = 'bitx' // hardcoded until PLAN.md phase 1 (login) picks the active session user
 
-const FS: FsNode = {
-  home: {
-    user: {
-      Desktop: {},
-      Documents: {
-        'welcome.txt':
-          'Welcome to Ubuntu Web Desktop!\n\nThis entire desktop environment runs in your browser.\nTry the Activities overview, snap windows to screen edges,\nor type "neofetch" in this terminal.',
-        'notes.md': '# Notes\n\n- Drag windows by their title bar\n- Drag to screen edge to snap\n- Double-click title bar to maximize\n- Right-click the desktop for options',
-        'report.odt': '[binary file]',
-      },
-      Downloads: {
-        'ubuntu-24.04.iso': '[binary file]',
-        'wallpapers.zip': '[binary file]',
-      },
-      Pictures: {
-        'jellyfish.png': '[binary file]',
-        'sunset.jpg': '[binary file]',
-      },
-      Music: {},
-      Videos: {},
-      '.bashrc': '# ~/.bashrc\nexport PS1="\\u@\\h:\\w$ "\nalias ll="ls -alF"',
-    },
-  },
+function formatCwd(cwd: string, home: string): string {
+  if (cwd === home) return '~'
+  if (cwd.startsWith(`${home}/`)) return `~${cwd.slice(home.length)}`
+  return cwd
 }
-
-const USER = 'user'
-const HOST = 'ubuntu'
-
-function resolvePath(cwd: string[], target: string): string[] | null {
-  if (target === '/') return []
-  const parts = target.split('/').filter(Boolean)
-  let path: string[]
-  if (target.startsWith('/')) {
-    path = []
-  } else if (target.startsWith('~')) {
-    path = ['home', 'user']
-    parts.shift()
-  } else {
-    path = [...cwd]
-  }
-  for (const p of parts) {
-    if (p === '.') continue
-    if (p === '..') path.pop()
-    else path.push(p)
-  }
-  return path
-}
-
-function getNode(path: string[]): FsNode | string | null {
-  let node: FsNode | string = FS
-  for (const p of path) {
-    if (typeof node !== 'object' || node === null || !(p in node)) return null
-    node = (node as FsNode)[p]
-  }
-  return node
-}
-
-function fmtPath(cwd: string[]): string {
-  const full = '/' + cwd.join('/')
-  if (full === '/home/user') return '~'
-  if (full.startsWith('/home/user/')) return '~' + full.slice(10)
-  return full
-}
-
-const NEOFETCH = [
-  { text: "            ./+o+-      ", cls: 'text-[#E95420]' },
-  { text: '      yyyyy- -yyyyyy+      ', cls: 'text-[#E95420]' },
-  { text: '   `-://+//////-yyyyyyo   ', cls: 'text-[#E95420]' },
-  { text: '       .++ .:/++++++/-.+sss/`  ', cls: 'text-[#E95420]' },
-  { text: '     .:++o:  /++++++++/:--:/-  ', cls: 'text-[#E95420]' },
-  { text: '    o:+o+:++.`..```.-/oo+++++/ ', cls: 'text-[#E95420]' },
-  { text: '   .:+o:+o/.          `+sssoo+/', cls: 'text-[#E95420]' },
-  { text: '     ++:+:              `-/:   ', cls: 'text-[#E95420]' },
-  { text: '    `o/+`               .++`   ', cls: 'text-[#E95420]' },
-  { text: '   `/++.                .o-    ', cls: 'text-[#E95420]' },
-  { text: '  `+++:.                 -+.   ', cls: 'text-[#E95420]' },
-]
-
-const NEOFETCH_INFO = [
-  ['', 'user@ubuntu'],
-  ['', '-------------------'],
-  ['OS', 'Ubuntu 24.04.2 LTS x86_64'],
-  ['Host', 'Kimi Web Desktop'],
-  ['Kernel', '6.11.0-generic'],
-  ['Uptime', '42 mins'],
-  ['Packages', '1782 (dpkg), 12 (snap)'],
-  ['Shell', 'bash 5.2.21'],
-  ['Resolution', '1920x1080'],
-  ['DE', 'GNOME 46 (Web)'],
-  ['WM', 'Mutter'],
-  ['Theme', 'Yaru'],
-  ['Icons', 'Yaru'],
-  ['CPU', 'Web V8 JIT (4) @ 3.40GHz'],
-  ['GPU', 'WebGL Renderer'],
-  ['Memory', '1842MiB / 7936MiB'],
-]
 
 export function TerminalApp() {
-  const ctx = useDesktop()
+  const desktop = useDesktop()
+  const { kernel, ready } = useKernel()
   const [lines, setLines] = useState<Line[]>([
     { text: 'Welcome to Ubuntu 24.04.2 LTS (GNU/Linux 6.11.0-generic x86_64)', cls: 'text-neutral-400' },
     { text: '', cls: '' },
-    { text: 'Type "help" to list available commands. Try "neofetch"!', cls: 'text-neutral-400' },
+    { text: 'Type "help" to list available commands.', cls: 'text-neutral-400' },
     { text: '', cls: '' },
   ])
   const [input, setInput] = useState('')
-  const [cwd, setCwd] = useState<string[]>(['home', 'user'])
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
+  const shellCtx = useMemo<ShellContext | null>(() => (ready ? kernel.createContext(CURRENT_USER) : null), [ready, kernel])
+  const [, bump] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -127,178 +39,60 @@ export function TerminalApp() {
 
   const print = (newLines: Line[]) => setLines((prev) => [...prev, ...newLines])
 
-  const runCommand = (raw: string) => {
+  const runCommand = async (raw: string) => {
+    const home = kernel.users.findByName(CURRENT_USER)?.home ?? '/root'
+    const prompt = shellCtx
+      ? `${shellCtx.currentUser}@${kernel.vfs.readFile('/etc/hostname').trim()}:${formatCwd(shellCtx.cwd, home)}$ ${raw}`
+      : `$ ${raw}`
+    print([{ text: prompt, cls: 'text-[#8eef97]' }])
+
     const cmdline = raw.trim()
-    print([{ text: `${USER}@${HOST}:${fmtPath(cwd)}$ ${raw}`, cls: 'text-[#8eef97]' }])
     if (!cmdline) return
 
-    const [cmd, ...args] = cmdline.split(/\s+/)
-
-    switch (cmd) {
-      case 'help':
-        print([
-          { text: 'Available commands:', cls: 'text-white font-bold' },
-          { text: '  ls [path]     list directory contents', cls: 'text-neutral-300' },
-          { text: '  cd <dir>      change directory', cls: 'text-neutral-300' },
-          { text: '  pwd           print working directory', cls: 'text-neutral-300' },
-          { text: '  cat <file>    print file contents', cls: 'text-neutral-300' },
-          { text: '  echo <text>   display a line of text', cls: 'text-neutral-300' },
-          { text: '  neofetch      show system information', cls: 'text-neutral-300' },
-          { text: '  uname -a      kernel information', cls: 'text-neutral-300' },
-          { text: '  date          current date and time', cls: 'text-neutral-300' },
-          { text: '  whoami        effective username', cls: 'text-neutral-300' },
-          { text: '  apt update    refresh package lists', cls: 'text-neutral-300' },
-          { text: '  sudo <cmd>    run as superuser', cls: 'text-neutral-300' },
-          { text: '  clear         clear the terminal', cls: 'text-neutral-300' },
-          { text: '  exit          close this terminal', cls: 'text-neutral-300' },
-        ])
-        break
-      case 'ls': {
-        const target = args[0] ? resolvePath(cwd, args[0]) : cwd
-        if (!target) {
-          print([{ text: `ls: cannot access '${args[0]}': No such file or directory`, cls: 'text-red-400' }])
-          break
-        }
-        const node = getNode(target)
-        if (node === null) {
-          print([{ text: `ls: cannot access '${args[0]}': No such file or directory`, cls: 'text-red-400' }])
-        } else if (typeof node === 'string') {
-          print([{ text: args[0] ?? '', cls: 'text-neutral-200' }])
-        } else {
-          const names = Object.keys(node)
-          if (!names.length) break
-          print(
-            names.map((n) => ({
-              text: typeof node[n] === 'object' ? n + '/' : n,
-              cls: typeof node[n] === 'object' ? 'text-[#729fcf] font-bold' : 'text-neutral-200',
-            })),
-          )
-        }
-        break
-      }
-      case 'cd': {
-        if (!args[0] || args[0] === '~') {
-          setCwd(['home', 'user'])
-          break
-        }
-        const target = resolvePath(cwd, args[0])
-        const node = target ? getNode(target) : null
-        if (target && node && typeof node === 'object') {
-          setCwd(target)
-        } else {
-          print([{ text: `bash: cd: ${args[0]}: No such file or directory`, cls: 'text-red-400' }])
-        }
-        break
-      }
-      case 'pwd':
-        print([{ text: '/' + cwd.join('/'), cls: 'text-neutral-200' }])
-        break
-      case 'cat': {
-        if (!args[0]) {
-          print([{ text: 'cat: missing operand', cls: 'text-red-400' }])
-          break
-        }
-        const target = resolvePath(cwd, args[0])
-        const node = target ? getNode(target) : null
-        if (typeof node === 'string') {
-          print(node.split('\n').map((t) => ({ text: t, cls: 'text-neutral-200' })))
-        } else {
-          print([{ text: `cat: ${args[0]}: No such file or directory`, cls: 'text-red-400' }])
-        }
-        break
-      }
-      case 'echo':
-        print([{ text: args.join(' ').replace(/^["']|["']$/g, ''), cls: 'text-neutral-200' }])
-        break
-      case 'whoami':
-        print([{ text: USER, cls: 'text-neutral-200' }])
-        break
-      case 'date':
-        print([{ text: new Date().toString(), cls: 'text-neutral-200' }])
-        break
-      case 'uname':
-        print([
-          {
-            text: args.includes('-a')
-              ? 'Linux ubuntu 6.11.0-generic #24-Ubuntu SMP PREEMPT_DYNAMIC x86_64 x86_64 x86_64 GNU/Linux'
-              : 'Linux',
-            cls: 'text-neutral-200',
-          },
-        ])
-        break
-      case 'hostname':
-        print([{ text: HOST, cls: 'text-neutral-200' }])
-        break
-      case 'neofetch': {
-        const out: Line[] = []
-        const rows = Math.max(NEOFETCH.length, NEOFETCH_INFO.length)
-        for (let i = 0; i < rows; i++) {
-          const art = NEOFETCH[i]?.text ?? ' '.repeat(32)
-          const info = NEOFETCH_INFO[i]
-          let infoText = ''
-          if (info) {
-            infoText = info[0] ? `${info[0]}: ${info[1]}` : info[1]
-          }
-          out.push({ text: art + '  ' + infoText, cls: i < NEOFETCH.length ? 'text-[#E95420]' : 'text-neutral-200' })
-        }
-        print(out)
-        break
-      }
-      case 'apt':
-      case 'apt-get': {
-        if (args[0] === 'update') {
-          print([
-            { text: 'Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease', cls: 'text-neutral-300' },
-            { text: 'Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]', cls: 'text-neutral-300' },
-            { text: 'Hit:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease', cls: 'text-neutral-300' },
-            { text: 'Fetched 126 kB in 1s (145 kB/s)', cls: 'text-neutral-300' },
-            { text: 'Reading package lists... Done', cls: 'text-[#8eef97]' },
-            { text: 'All packages are up to date.', cls: 'text-neutral-300' },
-          ])
-        } else if (args[0] === 'install') {
-          print([
-            { text: 'Reading package lists... Done', cls: 'text-neutral-300' },
-            { text: 'Building dependency tree... Done', cls: 'text-neutral-300' },
-            { text: `E: Unable to locate package ${args[1] ?? ''} (this is a web desktop)`, cls: 'text-yellow-300' },
-          ])
-        } else {
-          print([{ text: 'apt 2.7.14 (amd64) — try: apt update', cls: 'text-neutral-300' }])
-        }
-        break
-      }
-      case 'sudo':
-        if (args[0] === 'apt' || args[0] === 'apt-get') {
-          runCommand(args.join(' '))
-        } else {
-          print([
-            { text: '[sudo] password for user: ', cls: 'text-neutral-300' },
-            { text: 'user is not in the sudoers file. This incident will be reported.', cls: 'text-red-400' },
-          ])
-        }
-        break
-      case 'clear':
-        setLines([])
-        break
-      case 'exit':
-        print([{ text: 'logout', cls: 'text-neutral-400' }])
-        setTimeout(() => {
-          const win = ctx.windows.find((w) => w.appId === 'terminal')
-          if (win) ctx.closeWindow(win.id)
-        }, 350)
-        break
-      default:
-        print([{ text: `bash: ${cmd}: command not found`, cls: 'text-red-400' }])
+    if (!shellCtx) {
+      print([{ text: 'bash: kernel is still booting, try again in a moment', cls: 'text-yellow-300' }])
+      return
     }
+
+    if (cmdline === 'clear') {
+      setLines([])
+      return
+    }
+
+    if (cmdline === 'exit') {
+      print([{ text: 'logout', cls: 'text-neutral-400' }])
+      setTimeout(() => {
+        const win = desktop.windows.find((w) => w.appId === 'terminal')
+        if (win) desktop.closeWindow(win.id)
+      }, 350)
+      return
+    }
+
+    if (cmdline === 'help') {
+      print([
+        { text: 'Available commands:', cls: 'text-white font-bold' },
+        { text: kernel.registry.list().join('  '), cls: 'text-neutral-300' },
+        { text: 'clear, exit, help  (built into this terminal window)', cls: 'text-neutral-300' },
+      ])
+      return
+    }
+
+    const result = await kernel.shell.run(raw, shellCtx)
+    bump((n) => n + 1) // cwd/env/dirStack were mutated in place on the same object — force the prompt to re-render
+
+    const out: Line[] = []
+    if (result.stdout) out.push(...result.stdout.split('\n').map((text) => ({ text, cls: 'text-neutral-200' })))
+    if (result.stderr) out.push(...result.stderr.split('\n').map((text) => ({ text, cls: 'text-red-400' })))
+    print(out)
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      runCommand(input)
-      if (input.trim()) {
-        setHistory((h) => [...h, input])
-      }
-      setHistIdx(-1)
+      const value = input
       setInput('')
+      setHistIdx(-1)
+      if (value.trim()) setHistory((h) => [...h, value])
+      void runCommand(value)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (history.length) {
@@ -324,6 +118,10 @@ export function TerminalApp() {
     }
   }
 
+  const home = kernel.users.findByName(CURRENT_USER)?.home ?? '/root'
+  const promptCwd = shellCtx ? formatCwd(shellCtx.cwd, home) : '~'
+  const hostname = ready ? kernel.vfs.readFile('/etc/hostname').trim() : 'ubuntu'
+
   return (
     <div
       className="h-full w-full bg-[#300a24]/95 text-sm terminal-font overflow-hidden flex flex-col"
@@ -337,7 +135,7 @@ export function TerminalApp() {
         ))}
         <div className="flex items-center">
           <span className="text-[#8eef97] shrink-0">
-            {USER}@{HOST}:<span className="text-[#729fcf]">{fmtPath(cwd)}</span>$
+            {CURRENT_USER}@{hostname}:<span className="text-[#729fcf]">{promptCwd}</span>$
           </span>
           <input
             ref={inputRef}
@@ -348,6 +146,7 @@ export function TerminalApp() {
             autoFocus
             spellCheck={false}
             autoComplete="off"
+            disabled={!ready}
           />
         </div>
         <div ref={bottomRef} />

@@ -1,7 +1,7 @@
 import type { PersistenceAdapter } from '../persistence/PersistenceAdapter'
 import { canAccess, type PermissionSubject } from '../permissions'
 import { basename, dirname, resolvePath, segments } from './path'
-import { DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, type DirInode, type FileInode, type Inode } from './types'
+import { DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, type DirInode, type FileInode, type Inode, type SymlinkInode } from './types'
 
 export class VfsError extends Error {}
 export class PermissionError extends VfsError {}
@@ -24,6 +24,11 @@ function makeDir(name: string, owner: string, group: string, mode = DEFAULT_DIR_
 function makeFile(name: string, owner: string, group: string, content = '', mode = DEFAULT_FILE_MODE): FileInode {
   const t = now()
   return { type: 'file', name, owner, group, mode, mtime: t, ctime: t, content }
+}
+
+function makeSymlink(name: string, owner: string, group: string, target: string): SymlinkInode {
+  const t = now()
+  return { type: 'symlink', name, owner, group, mode: 0o777, mtime: t, ctime: t, target }
 }
 
 export class Vfs {
@@ -136,6 +141,20 @@ export class Vfs {
     const owner = opts.owner ?? opts.actor?.username ?? 'root'
     const group = opts.group ?? opts.actor?.username ?? 'root'
     parent.children[name] = makeFile(name, owner, group)
+    parent.mtime = now()
+  }
+
+  symlink(target: string, linkAbsPath: string, opts: { owner?: string; group?: string; actor?: PermissionSubject } = {}): void {
+    const parentPath = dirname(linkAbsPath)
+    const name = basename(linkAbsPath)
+    const parent = this.walkDir(parentPath)
+    if (!parent) throw new NotFoundError(`No such file or directory: ${parentPath}`)
+    if (parent.children[name]) throw new AlreadyExistsError(`File exists: ${linkAbsPath}`)
+
+    this.checkAccess(parent, opts.actor, 'write')
+    const owner = opts.owner ?? opts.actor?.username ?? 'root'
+    const group = opts.group ?? opts.actor?.username ?? 'root'
+    parent.children[name] = makeSymlink(name, owner, group, target)
     parent.mtime = now()
   }
 

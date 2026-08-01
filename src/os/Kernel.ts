@@ -15,6 +15,7 @@ import { registerPermissionCommands } from './shell/commands/permissions'
 import { registerProcessCommands } from './shell/commands/process'
 import { registerSearchCommands } from './shell/commands/search'
 import { registerSystemCommands } from './shell/commands/system'
+import { registerTextCommands } from './shell/commands/text'
 import { registerUserCommands } from './shell/commands/user'
 import { CommandRegistry } from './shell/registry'
 import { Shell } from './shell/Shell'
@@ -68,6 +69,7 @@ export class Kernel {
     registerDiskCommands(this.registry)
     registerSystemCommands(this.registry)
     registerArchiveCommands(this.registry)
+    registerTextCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }

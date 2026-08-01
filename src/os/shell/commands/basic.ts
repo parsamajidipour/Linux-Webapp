@@ -1,11 +1,10 @@
 import type { CommandRegistry } from '../registry'
 import { fail, ok } from '../types'
-import { flagChars } from './util'
 
 /**
  * Cross-phase seed commands not yet organized under their own PLAN.md sub-phase file:
- * echo/wc belong to 4.12 (text processing), whoami/id to 4.5 (user). They'll move
- * into dedicated files once those sub-phases are implemented for real.
+ * whoami/id belong to 4.5 (user) but were seeded early since they're needed almost everywhere.
+ * echo/wc moved to `text.ts` once 4.12 (text processing) implemented them for real.
  */
 export function registerBasicCommands(registry: CommandRegistry): void {
   registry.register('whoami', (_args, ctx) => ok(ctx.currentUser))
@@ -17,20 +16,6 @@ export function registerBasicCommands(registry: CommandRegistry): void {
       .map((g) => `${ctx.users.listGroups().find((gr) => gr.name === g)?.gid ?? 0}(${g})`)
       .join(',')
     return ok(`uid=${user.uid}(${user.username}) gid=${user.gid}(${user.groups[0] ?? user.username}) groups=${groups}`)
-  })
-
-  registry.register('echo', (args) => ok(args.join(' ')))
-
-  registry.register('wc', (args, _ctx, stdin) => {
-    const lineCount = stdin.length ? stdin.split('\n').length - (stdin.endsWith('\n') ? 1 : 0) : 0
-    const wordCount = stdin.split(/\s+/).filter(Boolean).length
-    const charCount = stdin.length
-
-    const flags = flagChars(args)
-    if (flags.includes('l')) return ok(String(lineCount))
-    if (flags.includes('w')) return ok(String(wordCount))
-    if (flags.includes('c')) return ok(String(charCount))
-    return ok(`${lineCount} ${wordCount} ${charCount}`)
   })
 
   registry.register('true', () => ok())

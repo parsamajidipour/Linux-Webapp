@@ -2,6 +2,7 @@ import { DesktopProvider, useDesktop } from './context/DesktopContext'
 import { Desktop } from './components/Desktop'
 import { LockScreen } from './components/LockScreen'
 import { BootScreen, PowerOffScreen } from './components/PowerScreens'
+import { KernelProvider } from '../os/context/KernelContext'
 
 function Shell() {
   const ctx = useDesktop()
@@ -17,8 +18,10 @@ function Shell() {
 
 export default function Ubuntu() {
   return (
-    <DesktopProvider>
-      <Shell />
-    </DesktopProvider>
+    <KernelProvider>
+      <DesktopProvider>
+        <Shell />
+      </DesktopProvider>
+    </KernelProvider>
   )
 }

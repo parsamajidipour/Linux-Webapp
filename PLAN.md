@@ -8,9 +8,9 @@
 
 > آخرین به‌روزرسانی: 2026-08-01
 
-- **مرحله‌ی فعلی:** هنوز کدی برای این نقشه‌راه نوشته نشده — این نسخه‌ی صفرِ پلنه.
-- **قدم بعدی:** شروع **فاز ۰ — هسته‌ی معماری (Core Kernel)**، از VFS شروع می‌کنیم.
-- **بیس‌لاین امروز:** پروژه یه SPA رو React 19 + Vite + shadcn/ui هست که یه دسکتاپ اوبونتو رو *ظاهری* شبیه‌سازی می‌کنه (نه data-driven). جزئیات کامل در «بیس‌لاین فعلی کد» پایین‌تر.
+- **مرحله‌ی فعلی:** ✅ **فاز ۰ (هسته‌ی معماری) تکمیل شد.** کد در `src/os/` — مستقل از React، ۴۳ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
+- **قدم بعدی:** **فاز ۳ — فایل‌سیستم واقعی**: بسط seed فعلی (`src/os/seed.ts`) به درخت کامل `/bin /etc /proc /var /usr ...` طبق چک‌لیست فاز۳ در پایین این فایل.
+- **نکته‌ی مهم:** فاز ۰ فقط **هسته** رو ساخته، هنوز به UI موجود (Terminal/Files/Login و...) وصل نشده — `KernelProvider` روی `Ubuntu.tsx` mount شده و boot می‌شه ولی هیچ کامپوننتی ازش استفاده نمی‌کنه. وصل‌کردن UI به کرنل کار فازهای ۱، ۴ و ۵ هست.
 
 ---
 
@@ -56,21 +56,23 @@
 
 ---
 
-## فاز ۰ — هسته‌ی معماری (Core Kernel) 🔴 اولویت اول
+## فاز ۰ — هسته‌ی معماری (Core Kernel) ✅ تکمیل‌شده (2026-08-01)
 
-اینجا پایه‌ی همه‌چیزه. هدف: یه ماژول مستقل (`src/os/`) که هیچ وابستگی به React نداره و می‌تونیم واحد-تست‌اش کنیم.
+اینجا پایه‌ی همه‌چیزه. یه ماژول مستقل (`src/os/`) که هیچ وابستگی به React نداره و واحد-تست شده (vitest، ۴۳ تست پاس).
 
-- [ ] **VFS (Virtual File System):** ساختار درختی `inode`-محور (نوع: file/dir/symlink، content، permissions، owner، group، mtime). API: `read/write/mkdir/rm/mv/cp/stat/ls/resolve(path)`. Persist در IndexedDB (نه localStorage — حجم بیشتر لازمه).
-- [ ] **Command Registry:** هر دستور یه ماژول جدا با امضای واحد `(args, stdin, ctx) => { stdout, stderr, exitCode }`. اضافه‌کردن دستور جدید = یه فایل جدید، نه دست‌زدن به یه `switch` غول‌پیکر.
-- [ ] **Bash Parser:** توکنایزر برای quoting، `|` pipe، `>` `>>` redirect، `*` wildcard (glob)، `$VAR` expansion، `&&`/`||`، چندین دستور با `;`.
-- [ ] **Process Manager:** فهرست فیک PID/PPID/CPU%/MEM% برای `ps/top/kill/jobs`. تایمر شبیه‌سازی‌شده برای «زمان اجرا».
-- [ ] **User & Permission System:** جدول کاربران (شبیه `/etc/passwd`)، گروه‌ها، رمز عبور (هش‌شده حتی اگه fake باشه)، `chmod/chown` واقعاً روی VFS اثر بذاره، چک permission موقع خوندن/نوشتن فایل.
-- [ ] **Package Database:** لیست فیک پکیج‌های نصب‌شده (برای `apt/dpkg`)، وضعیت نصب/حذف که در VFS هم منعکس بشه (مثلاً فایل باینری فیک تو `/usr/bin`).
-- [ ] **Service Manager:** لیست سرویس‌های فیک (NetworkManager, ssh, docker, nginx...) با وضعیت running/stopped، لاگ هر سرویس در `/var/log` بنویسه.
-- [ ] **Settings Store:** state مرکزی (theme, wallpaper, locale, network status...) با persistence یکپارچه — جایگزین اون `localStorage.setItem` پراکنده.
-- [ ] یه Context/Provider واحد (`KernelProvider`) که همه‌ی اینا رو در اختیار کل اپ (ترمینال + اپ‌های GUI) می‌ذاره.
+- [x] **VFS (Virtual File System):** `src/os/vfs/Vfs.ts` — درخت inode (file/dir/symlink، content، owner/group/mode، mtime/ctime). API: `stat/list/exists/mkdir/touch/readFile/writeFile/remove/move/copy/chmod/chown/sizeOf` + `resolve()` برای مسیرهای نسبی/`~`/`..`. Persistence از طریق `PersistenceAdapter` تزریق‌شدنی (`IndexedDbAdapter` تو مرورگر، `MemoryAdapter` تو تست‌ها).
+- [x] **Command Registry:** `src/os/shell/registry.ts` — `Map<name, handler>` ساده؛ هر دستور یه فایل جدا (`shell/commands/basic.ts`)، نه `switch`.
+- [x] **Bash Parser:** `src/os/shell/parser.ts` + `expand.ts` + `glob.ts` — توکنایزر با quoting (تک/دابل)، `|`، `>`/`>>`، `&&`/`||`/`;`، `$VAR`/`${VAR}` expansion، `*`/`?` glob روی VFS.
+- [x] **Process Manager:** `src/os/process/ProcessManager.ts` — پروسه‌های پایه‌ی فیک (init, systemd, gnome-shell, bash...) + `spawn/kill/list/uptimeSeconds`.
+- [x] **User & Permission System:** `src/os/users/Users.ts` + `src/os/permissions.ts` — کاربرهای seed‌شده (root/bitx/guest)، گروه‌ها، auth با هش (غیررمزنگاری، فقط شبیه‌سازی)، `canAccess()` مبتنی بر rwx که VFS واقعاً موقع read/write/chmod/chown چکش می‌کنه.
+- [x] **Package Database:** `src/os/packages/PackageManager.ts` — کاتالوگ + لیست نصب‌شده، `install/remove/search`.
+- [x] **Service Manager:** `src/os/services/ServiceManager.ts` — سرویس‌های فیک (NetworkManager, ssh, cron, docker...) با `start/stop`، و `log()` که موقع بوت رو `/var/log/syslog` می‌نویسه.
+- [x] **Settings Store:** `src/os/settings/SettingsStore.ts` — state مرکزی با `get/set/subscribe` + persistence؛ هنوز به UI موجود (تم/والپیپر تو `DesktopContext`) وصل نشده — اون migration کار فاز ۱/۲ هست.
+- [x] **Kernel + KernelProvider:** `src/os/Kernel.ts` همه‌ی زیرسیستم‌ها رو می‌سازه و `boot()` می‌کنه؛ `src/os/context/KernelContext.tsx` یه `<KernelProvider>` و `useKernel()` می‌ده. روی `Ubuntu.tsx` mount شده (دور `DesktopProvider`).
 
-**خروجی این فاز:** یه «سیستم‌عامل کوچولو» که هنوز UI نداره ولی از طریق یه تست/کنسول می‌شه باهاش `mkdir /home/bitx/test && ls /home/bitx` زد و جواب درست گرفت.
+**خروجی این فاز (تأیید‌شده با تست):** `src/os/Kernel.test.ts` دقیقاً همون اسمول‌تستی که تو نسخه‌ی قبلی این پلن نوشته بودم رو اجرا می‌کنه — `mkdir /home/bitx/test && ls /home/bitx` — و pass می‌شه. علاوه بر اون: pipe (`cat f | grep x | wc -l`)، redirect/append، wildcard، `$HOME`، `$?`/`&&`/`||`، permission denied بین دو کاربر، و رفتار Package/Process/Settings همه تست دارن.
+
+**محدودیت آگاهانه‌ی این فاز:** فقط ~۱۲ دستور seed شد (`pwd cd ls mkdir touch cat echo rm whoami id grep wc true false`) تا wiring اثبات بشه — نه کل ۷۰ دستوری که تو فاز ۴ لیست شده. `seedMinimalTree()` هم فقط `/home /root /tmp /etc /var/log` رو می‌سازه؛ درخت کامل ریشه مال فاز ۳ هست.
 
 ---
 
@@ -166,3 +168,4 @@
 ## لاگ پیشرفت
 
 - **2026-08-01:** پروژه Dockerize شد (multi-stage build + nginx، مشکل رجیستری خصوصی در `package-lock.json` حل شد). این فایل پلن ساخته شد؛ هنوز هیچ کدی از فازهای بالا نوشته نشده.
+- **2026-08-01:** فاز ۰ (هسته‌ی معماری) کامل پیاده‌سازی شد در `src/os/` — VFS، User/Permission، Process، Package، Service، Settings، Bash Parser، Command Registry، Shell، Kernel، KernelProvider. `vitest` اضافه شد (۴۳ تست، همه پاس). `tsc -b`، `vite build`، و بیلد/اجرای داکر هم تأیید شدن که چیزی نشکسته. قدم بعدی فاز ۳ (فایل‌سیستم واقعی) هست.

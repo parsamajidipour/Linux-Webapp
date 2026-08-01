@@ -1,0 +1,258 @@
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { AccentDef, Notification, SnapState, WallpaperId, WindowState } from '../types'
+
+export const ACCENTS: AccentDef[] = [
+  { name: 'Orange', value: '#E95420', hover: '#d64516' },
+  { name: 'Aubergine', value: '#77216F', hover: '#5e1a58' },
+  { name: 'Green', value: '#3EB34F', hover: '#2f9c3f' },
+  { name: 'Blue', value: '#1D7AED', hover: '#1366d4' },
+  { name: 'Magenta', value: '#B34CB3', hover: '#9d3c9d' },
+  { name: 'Red', value: '#E61A1A', hover: '#c91515' },
+]
+
+export type PowerState = 'boot' | 'lock' | 'desktop' | 'off'
+
+interface DesktopCtx {
+  // power / session
+  power: PowerState
+  setPower: (p: PowerState) => void
+  unlock: () => void
+  // windows
+  windows: WindowState[]
+  openApp: (appId: string, payload?: unknown) => void
+  closeWindow: (id: string) => void
+  focusWindow: (id: string) => void
+  minimizeWindow: (id: string) => void
+  toggleMaximize: (id: string) => void
+  updateWindow: (id: string, patch: Partial<WindowState>) => void
+  snapWindow: (id: string, snap: SnapState) => void
+  activeWindowId: string | null
+  // overlays
+  overviewOpen: boolean
+  setOverviewOpen: (v: boolean) => void
+  appGridOpen: boolean
+  setAppGridOpen: (v: boolean) => void
+  // settings
+  accent: AccentDef
+  setAccent: (a: AccentDef) => void
+  wallpaper: WallpaperId
+  setWallpaper: (w: WallpaperId) => void
+  darkStyle: boolean
+  setDarkStyle: (v: boolean) => void
+  brightness: number
+  setBrightness: (v: number) => void
+  volume: number
+  setVolume: (v: number) => void
+  wifiOn: boolean
+  setWifiOn: (v: boolean) => void
+  bluetoothOn: boolean
+  setBluetoothOn: (v: boolean) => void
+  dockAutoHide: boolean
+  setDockAutoHide: (v: boolean) => void
+  // notifications
+  notifications: Notification[]
+  pushNotification: (n: Omit<Notification, 'id'>) => void
+  dismissNotification: (id: number) => void
+  // clock
+  now: Date
+}
+
+const Ctx = createContext<DesktopCtx | null>(null)
+
+let winSeq = 0
+let notifSeq = 0
+
+export function DesktopProvider({ children }: { children: React.ReactNode }) {
+  const [power, setPower] = useState<PowerState>('boot')
+  const [windows, setWindows] = useState<WindowState[]>([])
+  const [overviewOpen, setOverviewOpen] = useState(false)
+  const [appGridOpen, setAppGridOpen] = useState(false)
+  const [accent, setAccentState] = useState<AccentDef>(ACCENTS[0])
+  const [wallpaper, setWallpaper] = useState<WallpaperId>('noble')
+  const [darkStyle, setDarkStyle] = useState(false)
+  const [brightness, setBrightness] = useState(100)
+  const [volume, setVolume] = useState(72)
+  const [wifiOn, setWifiOn] = useState(true)
+  const [bluetoothOn, setBluetoothOn] = useState(true)
+  const [dockAutoHide, setDockAutoHide] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [now, setNow] = useState(() => new Date())
+  const zCounter = useRef(10)
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const setAccent = useCallback((a: AccentDef) => {
+    setAccentState(a)
+    document.documentElement.style.setProperty('--ubuntu-accent', a.value)
+    document.documentElement.style.setProperty('--ubuntu-accent-hover', a.hover)
+    document.documentElement.style.setProperty('--ubuntu-accent-soft', `${a.value}29`)
+  }, [])
+
+  const pushNotification = useCallback((n: Omit<Notification, 'id'>) => {
+    const id = ++notifSeq
+    setNotifications((prev) => [...prev, { ...n, id }])
+    window.setTimeout(() => {
+      setNotifications((prev) => prev.filter((x) => x.id !== id))
+    }, 4600)
+  }, [])
+
+  const dismissNotification = useCallback((id: number) => {
+    setNotifications((prev) => prev.filter((x) => x.id !== id))
+  }, [])
+
+  const focusWindow = useCallback((id: string) => {
+    setWindows((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, minimized: false, z: ++zCounter.current } : w)),
+    )
+  }, [])
+
+  const openApp = useCallback((appId: string, payload?: unknown) => {
+    setOverviewOpen(false)
+    setAppGridOpen(false)
+    setWindows((prev) => {
+      const existing = prev.find((w) => w.appId === appId)
+      if (existing) {
+        return prev.map((w) =>
+          w.id === existing.id
+            ? { ...w, minimized: false, z: ++zCounter.current, payload: payload ?? w.payload }
+            : w,
+        )
+      }
+      const n = prev.length
+      return [
+        ...prev,
+        {
+          id: `win-${++winSeq}`,
+          appId,
+          title: appId,
+          x: 140 + (n % 5) * 44,
+          y: 64 + (n % 5) * 36,
+          w: 860,
+          h: 560,
+          z: ++zCounter.current,
+          minimized: false,
+          snap: null,
+          prevBounds: null,
+          closing: false,
+          payload,
+        },
+      ]
+    })
+  }, [])
+
+  const closeWindow = useCallback((id: string) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, closing: true } : w)))
+    window.setTimeout(() => {
+      setWindows((prev) => prev.filter((w) => w.id !== id))
+    }, 170)
+  }, [])
+
+  const minimizeWindow = useCallback((id: string) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, minimized: true } : w)))
+  }, [])
+
+  const updateWindow = useCallback((id: string, patch: Partial<WindowState>) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)))
+  }, [])
+
+  const toggleMaximize = useCallback((id: string) => {
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id) return w
+        if (w.snap === 'full') {
+          const b = w.prevBounds ?? { x: 120, y: 60, w: 860, h: 560 }
+          return { ...w, snap: null, ...b, prevBounds: null }
+        }
+        return {
+          ...w,
+          snap: 'full',
+          prevBounds: { x: w.x, y: w.y, w: w.w, h: w.h },
+        }
+      }),
+    )
+  }, [])
+
+  const snapWindow = useCallback((id: string, snap: SnapState) => {
+    setWindows((prev) =>
+      prev.map((w) => {
+        if (w.id !== id) return w
+        if (snap === null) {
+          const b = w.prevBounds ?? { x: 120, y: 60, w: 860, h: 560 }
+          return { ...w, snap: null, ...b, prevBounds: null }
+        }
+        if (w.snap === snap) return w
+        return {
+          ...w,
+          snap,
+          prevBounds: w.prevBounds ?? { x: w.x, y: w.y, w: w.w, h: w.h },
+        }
+      }),
+    )
+  }, [])
+
+  const unlock = useCallback(() => setPower('desktop'), [])
+
+  const activeWindowId = useMemo(() => {
+    const visible = windows.filter((w) => !w.minimized && !w.closing)
+    if (!visible.length) return null
+    return visible.reduce((a, b) => (a.z > b.z ? a : b)).id
+  }, [windows])
+
+  const value: DesktopCtx = {
+    power,
+    setPower,
+    unlock,
+    windows,
+    openApp,
+    closeWindow,
+    focusWindow,
+    minimizeWindow,
+    toggleMaximize,
+    updateWindow,
+    snapWindow,
+    activeWindowId,
+    overviewOpen,
+    setOverviewOpen,
+    appGridOpen,
+    setAppGridOpen,
+    accent,
+    setAccent,
+    wallpaper,
+    setWallpaper,
+    darkStyle,
+    setDarkStyle,
+    brightness,
+    setBrightness,
+    volume,
+    setVolume,
+    wifiOn,
+    setWifiOn,
+    bluetoothOn,
+    setBluetoothOn,
+    dockAutoHide,
+    setDockAutoHide,
+    notifications,
+    pushNotification,
+    dismissNotification,
+    now,
+  }
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+}
+
+export function useDesktop() {
+  const ctx = useContext(Ctx)
+  if (!ctx) throw new Error('useDesktop must be used within DesktopProvider')
+  return ctx
+}

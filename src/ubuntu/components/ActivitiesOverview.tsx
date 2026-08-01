@@ -1,0 +1,123 @@
+import { useMemo, useState } from 'react'
+import { Search, X } from 'lucide-react'
+import { useDesktop } from '../context/DesktopContext'
+import { APPS, getApp } from '../apps'
+
+export function ActivitiesOverview() {
+  const ctx = useDesktop()
+  const [query, setQuery] = useState('')
+
+  const filtered = useMemo(
+    () => APPS.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())),
+    [query],
+  )
+
+  if (!ctx.overviewOpen) return null
+
+  const openWins = ctx.windows.filter((w) => !w.closing)
+
+  return (
+    <div
+      className="fixed inset-0 z-[450] overview-zoom flex flex-col"
+      style={{ background: 'rgba(23,13,26,0.72)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)' }}
+      onClick={() => ctx.setOverviewOpen(false)}
+    >
+      {/* search */}
+      <div className="flex justify-center mt-16" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2.5 w-[420px] px-4 py-2.5 rounded-full bg-white/[0.12] border border-white/20 text-white backdrop-blur-xl">
+          <Search size={17} className="opacity-70" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Type to search…"
+            className="bg-transparent outline-none flex-1 text-[14px] placeholder-neutral-400"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && filtered.length) ctx.openApp(filtered[0].id)
+              if (e.key === 'Escape') ctx.setOverviewOpen(false)
+            }}
+          />
+          {query && (
+            <button onClick={() => setQuery('')} className="opacity-70 hover:opacity-100">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* content */}
+      <div className="flex-1 flex flex-col items-center justify-center px-24" onClick={(e) => e.stopPropagation()}>
+        {query ? (
+          /* search results */
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', width: 'min(760px, 100%)' }}>
+            {filtered.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => ctx.openApp(a.id)}
+                className="app-grid-icon flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-white/10"
+              >
+                {a.icon}
+                <span className="text-white text-[13px]">{a.name}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="col-span-full text-center text-neutral-400 text-[14px] py-10">
+                No results for “{query}”
+              </div>
+            )}
+          </div>
+        ) : openWins.length ? (
+          /* window cards */
+          <div className="flex flex-wrap items-center justify-center gap-6 max-w-6xl">
+            {openWins.map((w) => {
+              const app = getApp(w.appId)
+              return (
+                <button
+                  key={w.id}
+                  onClick={() => {
+                    ctx.focusWindow(w.id)
+                    ctx.setOverviewOpen(false)
+                  }}
+                  className="group flex flex-col items-center gap-2.5"
+                >
+                  <div
+                    className="relative w-[300px] h-[185px] rounded-xl overflow-hidden transition-transform duration-200 group-hover:scale-[1.04]"
+                    style={{
+                      background: ctx.darkStyle ? '#2b2b2b' : '#e4e2df',
+                      boxShadow: '0 18px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    {/* mini titlebar */}
+                    <div className={`h-7 flex items-center px-2 gap-1.5 ${ctx.darkStyle ? 'bg-[#333]' : 'bg-[#d9d7d4]'}`}>
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--ubuntu-accent)' }} />
+                      <span className="w-2.5 h-2.5 rounded-full bg-neutral-400/60" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-neutral-400/60" />
+                    </div>
+                    <div className={`flex-1 h-[calc(100%-28px)] flex items-center justify-center ${ctx.darkStyle ? 'bg-[#242424]' : 'bg-[#f6f5f4]'}`}>
+                      <div className="scale-[1.9]">{app.icon}</div>
+                    </div>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-white/[0.06] transition-colors" />
+                  </div>
+                  <span className="text-white text-[13px] font-medium flex items-center gap-2 text-shadow-panel">
+                    {app.name}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="text-center text-neutral-300">
+            <div className="text-[17px] font-medium mb-1">No open windows</div>
+            <div className="text-[13px] text-neutral-400">Search above or pick an app from the dash</div>
+          </div>
+        )}
+      </div>
+
+      {/* workspace hint */}
+      <div className="pb-8 flex justify-center gap-2">
+        <div className="h-1.5 w-6 rounded-full" style={{ background: 'var(--ubuntu-accent)' }} />
+        <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+      </div>
+    </div>
+  )
+}

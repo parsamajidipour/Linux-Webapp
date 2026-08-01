@@ -40,7 +40,7 @@ export function TerminalApp() {
   const print = (newLines: Line[]) => setLines((prev) => [...prev, ...newLines])
 
   const runCommand = async (raw: string) => {
-    const home = kernel.users.findByName(CURRENT_USER)?.home ?? '/root'
+    const home = kernel.users.findByName(shellCtx?.currentUser ?? CURRENT_USER)?.home ?? '/root'
     const prompt = shellCtx
       ? `${shellCtx.currentUser}@${kernel.vfs.readFile('/etc/hostname').trim()}:${formatCwd(shellCtx.cwd, home)}$ ${raw}`
       : `$ ${raw}`
@@ -118,7 +118,8 @@ export function TerminalApp() {
     }
   }
 
-  const home = kernel.users.findByName(CURRENT_USER)?.home ?? '/root'
+  const activeUser = shellCtx?.currentUser ?? CURRENT_USER
+  const home = kernel.users.findByName(activeUser)?.home ?? '/root'
   const promptCwd = shellCtx ? formatCwd(shellCtx.cwd, home) : '~'
   const hostname = ready ? kernel.vfs.readFile('/etc/hostname').trim() : 'ubuntu'
 
@@ -135,7 +136,7 @@ export function TerminalApp() {
         ))}
         <div className="flex items-center">
           <span className="text-[#8eef97] shrink-0">
-            {CURRENT_USER}@{hostname}:<span className="text-[#729fcf]">{promptCwd}</span>$
+            {activeUser}@{hostname}:<span className="text-[#729fcf]">{promptCwd}</span>$
           </span>
           <input
             ref={inputRef}

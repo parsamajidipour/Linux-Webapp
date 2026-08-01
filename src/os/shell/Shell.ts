@@ -19,7 +19,20 @@ export class Shell {
       if (stmt.op === 'and' && last.exitCode !== 0) continue
       if (stmt.op === 'or' && last.exitCode === 0) continue
 
-      last = await this.runStatement(stmt, ctx)
+      const result = await this.runStatement(stmt, ctx)
+
+      if (stmt.background) {
+        // No real async backgrounding — the command already ran to completion above.
+        // We still record it as a job so `jobs`/`fg` have something honest to report.
+        const commandText = stmt.commands.map((cmd) => cmd.map((t) => t.value).join(' ')).join(' | ')
+        const pid = ctx.processes.spawn(commandText, ctx.currentUser).pid
+        const id = ctx.jobs.length ? Math.max(...ctx.jobs.map((j) => j.id)) + 1 : 1
+        ctx.jobs.push({ id, pid, command: commandText, status: 'done', result })
+        last = ok(`[${id}] ${pid}`)
+      } else {
+        last = result
+      }
+
       ctx.env['?'] = String(last.exitCode)
     }
 
@@ -31,20 +44,41 @@ export class Shell {
     let result: CommandResult = ok()
 
     for (const cmdTokens of stmt.commands) {
-      const words = this.expandWords(cmdTokens, ctx)
+      let words = this.expandWords(cmdTokens, ctx)
       if (words.length === 0) continue
 
+      // `sudo` isn't a registered command — like real sudo, it elevates for one invocation
+      // only (the process re-execs as root), it's not a shell builtin.
+      let elevate = false
+      if (words[0] === 'sudo') {
+        elevate = true
+        words = words.slice(1)
+        if (!ctx.users.isSudoer(ctx.currentUser)) {
+          result = fail(`${ctx.currentUser} is not in the sudoers file.  This incident will be reported.`, 1)
+          break
+        }
+      }
+
       const [name, ...args] = words
+      if (elevate && !name) {
+        result = fail('usage: sudo command', 1)
+        break
+      }
+
       const handler = this.registry.get(name)
       if (!handler) {
         result = fail(`bash: ${name}: command not found`, 127)
         break
       }
 
+      const actingUser = ctx.currentUser
+      if (elevate) ctx.currentUser = 'root'
       try {
         result = await handler(args, ctx, stdin)
       } catch (e) {
         result = fail(e instanceof Error ? e.message : String(e), 1)
+      } finally {
+        if (elevate) ctx.currentUser = actingUser
       }
       stdin = result.stdout
     }

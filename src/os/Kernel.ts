@@ -8,7 +8,9 @@ import { registerBasicCommands } from './shell/commands/basic'
 import { registerFileCommands } from './shell/commands/fileOps'
 import { registerNavigationCommands } from './shell/commands/navigation'
 import { registerPermissionCommands } from './shell/commands/permissions'
+import { registerProcessCommands } from './shell/commands/process'
 import { registerSearchCommands } from './shell/commands/search'
+import { registerUserCommands } from './shell/commands/user'
 import { CommandRegistry } from './shell/registry'
 import { Shell } from './shell/Shell'
 import type { ShellContext } from './shell/types'
@@ -50,6 +52,8 @@ export class Kernel {
     registerFileCommands(this.registry)
     registerSearchCommands(this.registry)
     registerPermissionCommands(this.registry)
+    registerUserCommands(this.registry)
+    registerProcessCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }
@@ -85,6 +89,7 @@ export class Kernel {
       currentUser: username,
       cwd: home,
       dirStack: [],
+      jobs: [],
       env: {
         HOME: home,
         USER: username,

@@ -1,4 +1,4 @@
-export type TokenType = 'word' | 'pipe' | 'redirect_out' | 'redirect_append' | 'and' | 'or' | 'semi'
+export type TokenType = 'word' | 'pipe' | 'redirect_out' | 'redirect_append' | 'and' | 'or' | 'semi' | 'amp'
 
 export interface Token {
   type: TokenType
@@ -37,6 +37,11 @@ export function tokenize(line: string): Token[] {
       i += 2
       continue
     }
+    if (c === '&') {
+      tokens.push({ type: 'amp', value: '&', literal: false, quoted: false })
+      i++
+      continue
+    }
     if (c === ';') {
       tokens.push({ type: 'semi', value: ';', literal: false, quoted: false })
       i++
@@ -60,8 +65,7 @@ export function tokenize(line: string): Token[] {
 
     while (i < n) {
       const ch = line[i]
-      if (ch === ' ' || ch === '\t' || ch === '|' || ch === ';' || ch === '>') break
-      if (ch === '&' && line[i + 1] === '&') break
+      if (ch === ' ' || ch === '\t' || ch === '|' || ch === ';' || ch === '>' || ch === '&') break
 
       if (ch === "'") {
         hasSingleQuote = true
@@ -111,6 +115,8 @@ export interface Statement {
   /** Pipeline: each entry is one command's word tokens. */
   commands: Token[][]
   redirect: Redirect | null
+  /** Trailing `&` — run to completion immediately (no real async backgrounding) but report as a job. */
+  background: boolean
 }
 
 function buildStatement(tokens: Token[], op: Statement['op']): Statement {
@@ -130,13 +136,19 @@ function buildStatement(tokens: Token[], op: Statement['op']): Statement {
     filtered.push(t)
   }
 
+  let background = false
+  if (filtered.length && filtered[filtered.length - 1].type === 'amp') {
+    background = true
+    filtered.pop()
+  }
+
   const commands: Token[][] = [[]]
   for (const t of filtered) {
     if (t.type === 'pipe') commands.push([])
     else commands[commands.length - 1].push(t)
   }
 
-  return { op, commands, redirect }
+  return { op, commands, redirect, background }
 }
 
 /** Splits tokens into statements on `;`, `&&`, `||`, extracting the trailing redirect (if any) per statement. */

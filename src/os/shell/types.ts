@@ -23,12 +23,22 @@ export interface ShellContext {
   dirStack: string[]
   /** Mutable — `export` updates this directly. `$?` is kept here too. */
   env: Record<string, string>
+  /** Mutable — background (`cmd &`) jobs for this session; `jobs`/`bg`/`fg` read/pop from it. */
+  jobs: Job[]
 }
 
 export interface CommandResult {
   stdout: string
   stderr: string
   exitCode: number
+}
+
+export interface Job {
+  id: number
+  pid: number
+  command: string
+  status: 'running' | 'done'
+  result: CommandResult
 }
 
 export type CommandHandler = (args: string[], ctx: ShellContext, stdin: string) => CommandResult | Promise<CommandResult>

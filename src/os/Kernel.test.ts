@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { Kernel } from './Kernel'
+import { MemoryAdapter } from './persistence/MemoryAdapter'
 import type { ShellContext } from './shell/types'
 
 describe('Kernel (phase 0 integration)', () => {
@@ -125,5 +126,24 @@ describe('Kernel (phase 0 integration)', () => {
     expect(seen).toBe('light')
     expect(kernel.settings.get().theme).toBe('light')
     unsubscribe()
+  })
+
+  it('running a shell command survives a full reload — regression test for the missing autosave wiring found in phase 4.10', async () => {
+    // Two Kernel *instances* sharing the same backing store, simulating a page reload:
+    // the first is the tab before refresh, the second is the fresh tab after.
+    const vfsStore = new MemoryAdapter()
+    const usersStore = new MemoryAdapter()
+    const packagesStore = new MemoryAdapter()
+
+    const before = new Kernel({ vfs: vfsStore, users: usersStore, packages: packagesStore })
+    await before.boot()
+    const beforeCtx = before.createContext('bitx')
+    await before.shell.run('echo hello > /home/bitx/note.txt', beforeCtx)
+    await before.shell.run('pwd', beforeCtx) // exercises Shell.run's per-command persist path
+
+    const after = new Kernel({ vfs: vfsStore, users: usersStore, packages: packagesStore })
+    await after.boot()
+    expect(after.vfs.readFile('/home/bitx/note.txt')).toBe('hello')
+    expect(after.vfs.readFile('/home/bitx/.bash_history')).toContain('pwd')
   })
 })

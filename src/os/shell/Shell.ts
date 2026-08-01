@@ -38,6 +38,11 @@ export class Shell {
       ctx.env['?'] = String(last.exitCode)
     }
 
+    // Persist immediately after every command, not just on the Kernel's autosave interval —
+    // otherwise a reload seconds after typing something can lose it. `.save()` is a no-op
+    // when no persistence adapter is configured (e.g. in tests), so this is always safe.
+    await Promise.all([ctx.vfs.save(), ctx.users.save(), ctx.packages.save()])
+
     return last
   }
 

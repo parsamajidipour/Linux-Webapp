@@ -43,7 +43,11 @@ export class Kernel {
   readonly bootTime = Date.now()
   booted = false
 
+  private readonly hasPersistence: boolean
+  private autosaveTimer: ReturnType<typeof setInterval> | null = null
+
   constructor(persistence: KernelPersistence = {}) {
+    this.hasPersistence = Boolean(persistence.vfs || persistence.users || persistence.packages)
     this.vfs = new Vfs(persistence.vfs)
     this.users = new UserStore(persistence.users)
     this.processes = new ProcessManager()
@@ -77,11 +81,21 @@ export class Kernel {
       if (svc.status === 'active') this.services.log(this.vfs, `${svc.name}[1]: Started ${svc.description}.`)
     }
 
+    // Belt-and-suspenders: Shell.run() already persists after every command, but future
+    // subsystems that mutate state outside the shell (GUI apps) won't go through that path.
+    if (this.hasPersistence) {
+      this.autosaveTimer = setInterval(() => void this.persist(), 4000)
+    }
+
     this.booted = true
   }
 
   async persist(): Promise<void> {
     await Promise.all([this.vfs.save(), this.users.save(), this.packages.save()])
+  }
+
+  dispose(): void {
+    if (this.autosaveTimer) clearInterval(this.autosaveTimer)
   }
 
   createContext(username: string): ShellContext {

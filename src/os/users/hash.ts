@@ -1,8 +1,6 @@
-/** djb2 — deterministic and fast, not a real security primitive. Good enough for a simulated /etc/shadow. */
+import { djb2Hash } from '../hash'
+
+/** Not a real security primitive — this is a simulated OS, not a real auth boundary. */
 export function hashPassword(password: string): string {
-  let hash = 5381
-  for (let i = 0; i < password.length; i++) {
-    hash = (hash * 33) ^ password.charCodeAt(i)
-  }
-  return (hash >>> 0).toString(16)
+  return djb2Hash(password).toString(16)
 }

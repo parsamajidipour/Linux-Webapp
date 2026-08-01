@@ -1,3 +1,4 @@
+import { binariesFor } from '../packages/binaries'
 import type { PackageManager } from '../packages/PackageManager'
 import type { UserStore } from '../users/Users'
 import type { Vfs } from '../vfs/Vfs'
@@ -28,15 +29,6 @@ root    ALL=(ALL:ALL) ALL
 %sudo   ALL=(ALL:ALL) ALL
 `
 
-/** Binary names to seed under /usr/bin for each pre-installed package (falls back to the package name). */
-const PACKAGE_BINARIES: Record<string, string[]> = {
-  bash: ['bash', 'sh'],
-  coreutils: ['ls', 'cat', 'cp', 'mv', 'rm', 'mkdir'],
-  apt: ['apt', 'apt-get'],
-  dpkg: ['dpkg'],
-  systemd: ['systemctl', 'systemd'],
-  'openssh-server': ['sshd', 'ssh'],
-}
 
 function seedHome(vfs: Vfs, username: string, home: string, desktopDirs: boolean): void {
   vfs.mkdir(home, { parents: true, owner: username, group: username })
@@ -128,7 +120,7 @@ export function seedRootFilesystem(vfs: Vfs, users: UserStore, packages: Package
   vfs.mkdir('/usr/share', { owner: 'root', group: 'root' })
   vfs.mkdir('/usr/local', { owner: 'root', group: 'root' })
   for (const pkg of packages.list()) {
-    const binaries = PACKAGE_BINARIES[pkg.name] ?? [pkg.name]
+    const binaries = binariesFor(pkg.name)
     for (const bin of binaries) {
       vfs.writeFile(`/usr/bin/${bin}`, `[fake binary for package ${pkg.name} ${pkg.version}]`, {
         owner: 'root',

@@ -7,6 +7,9 @@ import { ServiceManager } from './services/ServiceManager'
 import { registerBasicCommands } from './shell/commands/basic'
 import { registerFileCommands } from './shell/commands/fileOps'
 import { registerNavigationCommands } from './shell/commands/navigation'
+import { registerDiskCommands } from './shell/commands/disk'
+import { registerNetworkCommands } from './shell/commands/network'
+import { registerPackageCommands } from './shell/commands/packages'
 import { registerPermissionCommands } from './shell/commands/permissions'
 import { registerProcessCommands } from './shell/commands/process'
 import { registerSearchCommands } from './shell/commands/search'
@@ -54,6 +57,9 @@ export class Kernel {
     registerPermissionCommands(this.registry)
     registerUserCommands(this.registry)
     registerProcessCommands(this.registry)
+    registerNetworkCommands(this.registry)
+    registerPackageCommands(this.registry)
+    registerDiskCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }

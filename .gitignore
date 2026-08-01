@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Internal working notes — not part of the public project
+PLAN.md
+.tmp-*

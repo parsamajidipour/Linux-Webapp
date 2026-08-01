@@ -1,10 +1,7 @@
 import { formatMode } from '../../permissions'
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type ShellContext } from '../types'
-
-function homeOf(ctx: ShellContext): string {
-  return ctx.users.findByName(ctx.currentUser)?.home ?? '/root'
-}
+import { homeOf } from './util'
 
 function renderTree(ctx: ShellContext, absPath: string, prefix: string, out: string[]): { dirs: number; files: number } {
   const node = ctx.vfs.stat(absPath)

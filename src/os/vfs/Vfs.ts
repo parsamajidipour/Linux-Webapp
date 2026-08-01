@@ -96,7 +96,7 @@ export class Vfs {
     }
   }
 
-  mkdir(absPath: string, opts: { parents?: boolean; owner?: string; group?: string; actor?: PermissionSubject } = {}): void {
+  mkdir(absPath: string, opts: { parents?: boolean; owner?: string; group?: string; mode?: number; actor?: PermissionSubject } = {}): void {
     if (absPath === '/') {
       if (this.root.type === 'dir') return
     }
@@ -120,11 +120,11 @@ export class Vfs {
 
     const owner = opts.owner ?? opts.actor?.username ?? 'root'
     const group = opts.group ?? opts.actor?.username ?? 'root'
-    parent.children[name] = makeDir(name, owner, group)
+    parent.children[name] = opts.mode !== undefined ? makeDir(name, owner, group, opts.mode) : makeDir(name, owner, group)
     parent.mtime = now()
   }
 
-  touch(absPath: string, opts: { owner?: string; group?: string; actor?: PermissionSubject } = {}): void {
+  touch(absPath: string, opts: { owner?: string; group?: string; mode?: number; actor?: PermissionSubject } = {}): void {
     const parentPath = dirname(absPath)
     const name = basename(absPath)
     const parent = this.walkDir(parentPath)
@@ -140,7 +140,7 @@ export class Vfs {
     this.checkAccess(parent, opts.actor, 'write')
     const owner = opts.owner ?? opts.actor?.username ?? 'root'
     const group = opts.group ?? opts.actor?.username ?? 'root'
-    parent.children[name] = makeFile(name, owner, group)
+    parent.children[name] = opts.mode !== undefined ? makeFile(name, owner, group, '', opts.mode) : makeFile(name, owner, group)
     parent.mtime = now()
   }
 

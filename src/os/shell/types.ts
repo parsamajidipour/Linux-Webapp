@@ -4,6 +4,7 @@ import type { ServiceManager } from '../services/ServiceManager'
 import type { SettingsStore } from '../settings/SettingsStore'
 import type { UserStore } from '../users/Users'
 import type { Vfs } from '../vfs/Vfs'
+import type { CommandRegistry } from './registry'
 
 export interface ShellContext {
   vfs: Vfs
@@ -12,6 +13,8 @@ export interface ShellContext {
   packages: PackageManager
   services: ServiceManager
   settings: SettingsStore
+  /** Read-only introspection for commands like `type`/`command -v`. */
+  registry: CommandRegistry
   /** Mutable — commands like `su` update this directly. */
   currentUser: string
   /** Mutable — `cd` updates this directly. */

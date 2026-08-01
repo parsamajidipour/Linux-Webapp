@@ -7,6 +7,8 @@ import { ServiceManager } from './services/ServiceManager'
 import { registerBasicCommands } from './shell/commands/basic'
 import { registerFileCommands } from './shell/commands/fileOps'
 import { registerNavigationCommands } from './shell/commands/navigation'
+import { registerPermissionCommands } from './shell/commands/permissions'
+import { registerSearchCommands } from './shell/commands/search'
 import { CommandRegistry } from './shell/registry'
 import { Shell } from './shell/Shell'
 import type { ShellContext } from './shell/types'
@@ -46,6 +48,8 @@ export class Kernel {
     this.registry = new CommandRegistry()
     registerNavigationCommands(this.registry)
     registerFileCommands(this.registry)
+    registerSearchCommands(this.registry)
+    registerPermissionCommands(this.registry)
     registerBasicCommands(this.registry)
     this.shell = new Shell(this.registry)
   }
@@ -77,6 +81,7 @@ export class Kernel {
       packages: this.packages,
       services: this.services,
       settings: this.settings,
+      registry: this.registry,
       currentUser: username,
       cwd: home,
       dirStack: [],
@@ -86,6 +91,7 @@ export class Kernel {
         PATH: '/usr/local/bin:/usr/bin:/bin',
         LANG: 'en_US.UTF-8',
         SHELL: '/bin/bash',
+        UMASK: '0022',
         '?': '0',
       },
     }

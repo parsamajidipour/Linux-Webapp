@@ -1,6 +1,6 @@
 import type { Vfs } from '../vfs/Vfs'
 
-function globToRegExp(pattern: string): RegExp {
+export function globToRegExp(pattern: string): RegExp {
   let re = '^'
   for (const ch of pattern) {
     if (ch === '*') re += '.*'

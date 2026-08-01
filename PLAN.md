@@ -8,8 +8,9 @@
 
 > آخرین به‌روزرسانی: 2026-08-01
 
-- **مرحله‌ی فعلی:** فاز ۰ و فاز ۳ تکمیل. از فاز ۴ (ترمینال/Bash)، زیرمرحله‌های **۴.۱ (Navigation)** و **۴.۲ (File ops)** هم تکمیل شدن. کد در `src/os/` — ۶۹ تست vitest پاس، `tsc -b` و بیلد داکر هم سبزن.
-- **قدم بعدی:** فاز ۴.۳ + ۴.۴ — **Search + Permission**: `find, locate, grep(از قبل بخشی هست), which, whereis, type` و `chmod, chown, chgrp, umask` (باید واقعاً رو VFS اثر بذارن — که VFS از فاز۰ همین الانشم پشتیبانی می‌کنه، فقط دستور شل کمه).
+- **مرحله‌ی فعلی:** فاز ۰ و فاز ۳ تکمیل. از فاز ۴: **۴.۱ Navigation، ۴.۲ File ops، ۴.۳ Search، ۴.۴ Permission** تکمیل. `TerminalApp.tsx` واقعاً به کرنل وصله و هر زیرمرحله بلافاصله توش در دسترسه.
+- **قدم بعدی:** فاز ۴.۵ — **User**: `whoami(از قبل هست), id(از قبل هست), groups, passwd, sudo, su`. این یکی مهمه چون `sudo`/`su` باید واقعاً uid کاربر رو تو ShellContext عوض کنن (elevation موقت)، و باید بعد از قبلی‌ها یه تست دستی تو مرورگر هم بزنیم (طبق روال جدید).
+- **نکته‌ی مهم (تغییر روند از این به بعد):** طبق درخواست کاربر، از این جلسه به بعد UI (فعلاً فقط ترمینال) بعد از هر زیرمرحله وصل می‌مونه، نه اینکه همه‌چیز تا آخر فاز ۴ نامرئی بمونه. یعنی: `date/uname/hostname/neofetch/apt/sudo` که تو نسخه‌ی قدیمی ترمینال بودن، **موقتاً از دست رفتن** چون هنوز تو کرنل پیاده نشدن (مال زیرمرحله‌های ۴.۵/۴.۸/۴.۱۰ هستن) — عمداً به‌جای ساختن نسخه‌ی موازی UI-only، صبر می‌کنیم تا زیرمرحله‌ی درستش برسه (طبق همون اصل «data-driven، نه hack» که خود کاربر اول گفت).
 - **نکته‌ی مهم:** هنوز **هیچ‌کدوم از این‌ها به UI موجود وصل نشدن** — `TerminalApp.tsx` فعلی هنوز همون فایل‌سیستم فیک تک‌فایلی قدیمی خودش رو داره، نه کرنل جدید. `KernelProvider` روی `Ubuntu.tsx` mount شده و silently boot می‌شه ولی هیچ کامپوننتی مصرفش نمی‌کنه. وصل‌کردن UI به کرنل (Terminal/Files/Login) کار فازهای ۱، ۴ و ۵ هست — به‌عمد به تعویق افتاده تا کرنل کامل و تست‌شده باشه (تصمیمی که با کاربر هماهنگ شد: 2026-08-01).
 
 ---
@@ -97,8 +98,8 @@
 
 - [x] **۴‌.۱ Navigation:** `pwd, ls, ls -la, tree, cd, pushd, popd` — `shell/commands/navigation.ts`
 - [x] **۴.۲ File ops:** `touch, mkdir, rmdir, rm, cp, mv, ln, cat, less, head, tail, file, stat` — `shell/commands/fileOps.ts`. `ln -s` کار می‌کنه (symlink واقعی به VFS اضافه شد)؛ `ln` بدون `-s` (hard link) عمداً رد می‌شه چون VFS ما مفهوم inode مشترک نداره — به‌جای رفتار غلط، پیغام صریح می‌ده.
-- [ ] **۴.۳ Search:** `find, locate, grep, which, whereis, type`
-- [ ] **۴.۴ Permission:** `chmod, chown, chgrp, umask` (واقعاً روی VFS اثر بذاره)
+- [x] **۴.۳ Search:** `find, locate, grep, which, whereis, type` — `shell/commands/search.ts`. `which`/`type` واقعاً `$PATH` رو تو VFS می‌گردن (نه فیک)؛ `type` بین باینری واقعی (`ls is /usr/bin/ls`) و شل‌بیلتین (`cd is a shell builtin`) درست فرق می‌ذاره چون این‌ها به `/usr/bin` seed‌شده‌ی فاز۳ وصلن.
+- [x] **۴.۴ Permission:** `chmod, chown, chgrp, umask` — `shell/commands/permissions.ts`. `chmod` هم عددی (`755`) هم نمادین (`u+x`, `go-w`) رو ساپورت می‌کنه. `chown`/`chgrp` واقعاً چک root بودن می‌کنن (کاربر عادی نمی‌تونه owner فایل خودشو عوض کنه — دقیقاً رفتار واقعی یونیکس). `umask` واقعاً کار می‌کنه: به VFS یه پارامتر `mode` اختیاری برای `mkdir`/`touch` اضافه شد که با `DEFAULT_MODE & ~umask` محاسبه می‌شه، نه فقط یه عدد نمایشی.
 - [ ] **۴.۵ User:** `whoami, id, groups, passwd, sudo, su` (وصل به User System)
 - [ ] **۴.۶ Process:** `ps, top, htop, kill, killall, jobs, bg, fg, nohup` (وصل به Process Manager)
 - [ ] **۴.۷ Network (فیک ولی قانع‌کننده):** `ping, curl, wget, ip, ss, netstat, dig, nslookup, host, whois`
@@ -139,7 +140,7 @@
 نکته‌ی مهم: این فاز یعنی اپ‌های *موجود* رو از UI تزئینی به UI واقعاً وصل‌به‌VFS/کرنل تبدیل کنیم، نه از صفر ساختن.
 
 - [ ] **Files:** Copy/Move/Rename/Delete/Create folder/Search — همه از طریق VFS واقعی فاز۰/۳ (الان با ترمینال sync نیست)
-- [ ] **Terminal:** از قبل تو فاز ۴ کامل می‌شه
+- [x] **Terminal:** از فاز ۴ به بعد به‌صورت تدریجی وصل می‌شه، نه یک‌جا آخر. `TerminalApp.tsx` از ۲۰۲۶-۰۸-۰۱ دیگه هیچ FS فیک جدایی نداره — مستقیماً `kernel.shell.run()` صدا می‌زنه. با اضافه‌شدن هر زیرمرحله‌ی فاز۴، دستورات جدید خودکار همینجا هم در دسترس می‌شن.
 - [ ] **Text Editor:** ذخیره/بارگذاری از VFS واقعی (الان یه `localStorage` تکی و ایزوله داره)
 - [ ] **Calculator:** بررسی/تکمیل منطق محاسبه‌ی واقعی (اگه‌جایی ساده‌سازی شده)
 - [ ] **Settings:** Theme, Wallpaper, User, Keyboard, Network, About — همه از Settings Store فاز۰ بخونن/بنویسن
@@ -176,3 +177,5 @@
 - **2026-08-01:** کاربر بعد از دیدن لوکال‌هاست متوجه شد فاز ۰ چیزی از نظر ظاهری تغییر نمی‌ده (چون کاملاً نامرئیه — فقط موتور پشت‌صحنه‌ست). بین سه گزینه («وصل کردن سریع ترمینال»، «چک با DevTools»، «صبر و ادامه‌ی ترتیب پلن») گزینه‌ی سوم رو انتخاب کرد؛ یعنی وصل‌شدن UI به کرنل عمداً به فازهای ۱/۴/۵ موکول می‌مونه.
 - **2026-08-01:** فاز ۳ (فایل‌سیستم واقعی) کامل شد در `src/os/fs/` — درخت کامل ریشه، `/etc/passwd|shadow|group` از UserStore رندر می‌شن، `/var/log` واقعی، `/proc/uptime` و `/proc/meminfo` از طریق قابلیت جدید `Vfs.registerDynamic()` واقعاً زنده‌ن، `/usr/bin` از PackageManager پر می‌شه. ۱۳ تست جدید (جمعاً ۵۶ تست) پاس؛ `tsc -b`، build، و داکر هم تأیید شدن. قدم بعدی فاز ۴ (ترمینال کامل، ~۷۰ دستور) هست.
 - **2026-08-01:** فاز ۴.۱ (Navigation) و ۴.۲ (File ops) پیاده شدن — `shell/commands/navigation.ts` (`pwd cd ls tree pushd popd`) و `shell/commands/fileOps.ts` (`touch mkdir rmdir rm cp mv ln cat less head tail file stat`). به این مناسبت به VFS متد `symlink()` و به ShellContext فیلد `dirStack` اضافه شد. `basic.ts` تریم شد (فقط echo/whoami/id/grep/wc/true/false موندن، چون مال زیرمرحله‌های بعدی‌ان). ۱۳ تست جدید (جمعاً ۶۹ تست) پاس؛ `tsc -b`، build، داکر هم تأیید شدن. قدم بعدی ۴.۳+۴.۴ (Search + Permission) هست.
+- **2026-08-01:** کاربر تو مرورگر خودش `tree` رو تست کرد و طبیعتاً "command not found" گرفت چون `TerminalApp.tsx` هنوز به FS فیک قدیمی وصل بود، نه کرنل جدید. تصمیم گرفتیم به‌جای صبر تا آخر فاز ۴، از همین الان UI رو مرحله‌به‌مرحله وصل نگه داریم. `TerminalApp.tsx` بازنویسی شد: دیگه هیچ منطق FS/دستور خودش رو نداره، مستقیماً `useKernel()` + `kernel.shell.run()` صدا می‌زنه؛ پرامپت واقعی از `ctx.cwd`/`/etc/hostname` خونده می‌شه؛ `clear/exit/help` سه‌تا فرمان UI-level باقی موندن (بستن پنجره و لیست‌کردن `registry.list()` کار کرنل نیست). با Playwright (نصب موقت `playwright-core`، بعد پاک شد) واقعاً تو کروم هدلس لاگین کردم، ترمینال رو باز کردم، و `pwd/mkdir -p/tree/ls -la/cd&&pwd/echo>+cat/ln -s+ls -l` رو زدم — همه‌چیز درست کار کرد (اسکرین‌شات گرفته شد، صفر خطای کنسول). دستورات قدیمی `date/uname/hostname/neofetch/apt/sudo` که تو کرنل هنوز پیاده نشدن عمداً برنگشتن — منتظر زیرمرحله‌ی واقعی‌شون می‌مونیم. ۶۹ تست vitest، `tsc -b`، build، داکر همه سبز.
+- **2026-08-01:** فاز ۴.۳ (Search) و ۴.۴ (Permission) پیاده شدن. `ShellContext` یه فیلد `registry` گرفت (برای `type`/`which` که باید بدونن یه اسم دستور واقعاً ثبت‌شده یا نه). یه باگ واقعی تو تست خودم پیدا شد نه تو کد: فرض کرده بودم کاربر عادی می‌تونه `chown` بزنه؛ ولی رفتار واقعی یونیکس (که کد درست پیاده‌ش کرده بود) اینه که فقط root اجازه داره owner عوض کنه — تست رو اصلاح کردم، نه کد رو. برای رفع تکرار، یه `commands/util.ts` مشترک (`homeOf`/`errMsg`/`modeWithUmask`) ساختم و navigation/fileOps رو بهش وصل کردم. دوباره با Playwright تو مرورگر واقعی `find/which/type/chmod(عددی+نمادین)/umask` رو زدم — همه درست کار کرد، از جمله اینکه `sudo` هنوز عمداً "command not found" می‌ده (چون فاز۴.۵ هنوز نرسیده). ۸۳ تست vitest، `tsc -b`، build، داکر همه سبز.

@@ -1,14 +1,8 @@
 import { formatMode } from '../../permissions'
+import { DEFAULT_DIR_MODE, DEFAULT_FILE_MODE } from '../../vfs/types'
 import type { CommandRegistry } from '../registry'
 import { fail, ok, type CommandResult, type ShellContext } from '../types'
-
-function homeOf(ctx: ShellContext): string {
-  return ctx.users.findByName(ctx.currentUser)?.home ?? '/root'
-}
-
-function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
-}
+import { errMsg, homeOf, modeWithUmask } from './util'
 
 function readTarget(ctx: ShellContext, target: string): string {
   const abs = ctx.vfs.resolve(target, ctx.cwd, homeOf(ctx))
@@ -60,10 +54,11 @@ export function registerFileCommands(registry: CommandRegistry): void {
     if (!targets.length) return fail('mkdir: missing operand')
 
     const actor = ctx.users.toSubject(ctx.currentUser)
+    const mode = modeWithUmask(DEFAULT_DIR_MODE, ctx)
     for (const t of targets) {
       const abs = ctx.vfs.resolve(t, ctx.cwd, home)
       try {
-        ctx.vfs.mkdir(abs, { parents, actor })
+        ctx.vfs.mkdir(abs, { parents, actor, mode })
       } catch (e) {
         return fail(`mkdir: cannot create directory '${t}': ${errMsg(e)}`)
       }
@@ -95,10 +90,11 @@ export function registerFileCommands(registry: CommandRegistry): void {
     if (!args.length) return fail('touch: missing file operand')
 
     const actor = ctx.users.toSubject(ctx.currentUser)
+    const mode = modeWithUmask(DEFAULT_FILE_MODE, ctx)
     for (const t of args) {
       const abs = ctx.vfs.resolve(t, ctx.cwd, home)
       try {
-        ctx.vfs.touch(abs, { actor })
+        ctx.vfs.touch(abs, { actor, mode })
       } catch (e) {
         return fail(`touch: cannot touch '${t}': ${errMsg(e)}`)
       }

@@ -14,7 +14,14 @@ function formatCwd(cwd: string, home: string): string {
   return cwd
 }
 
-export function TerminalApp() {
+interface TerminalPayload {
+  /** A command to run automatically once the shell is ready — e.g. Activities search opening
+   * a real VFS file result runs `cat <path>` here instead of pretending to "open" it in an
+   * app that isn't wired to the kernel yet. */
+  runOnOpen?: string
+}
+
+export function TerminalApp({ payload }: { payload?: unknown }) {
   const desktop = useDesktop()
   const { kernel, ready } = useKernel()
   const [lines, setLines] = useState<Line[]>([
@@ -105,6 +112,17 @@ export function TerminalApp() {
     if (result.stderr) out.push(...result.stderr.split('\n').map((text) => ({ text, cls: 'text-red-400' })))
     print(out)
   }
+
+  const lastRunPayload = useRef<unknown>(null)
+  useEffect(() => {
+    const runOnOpen = (payload as TerminalPayload | undefined)?.runOnOpen
+    if (!shellCtx || !runOnOpen || payload === lastRunPayload.current) return
+    lastRunPayload.current = payload
+    void runCommand(runOnOpen)
+    // runCommand is recreated every render; the lastRunPayload ref above (not this dep list)
+    // is what actually guards against re-running the same command twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload, shellCtx])
 
   const longestCommonPrefix = (words: string[]): string => {
     if (!words.length) return ''

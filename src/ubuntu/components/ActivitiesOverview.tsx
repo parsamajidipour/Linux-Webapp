@@ -1,16 +1,66 @@
 import { useMemo, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { File, Folder, Search, X } from 'lucide-react'
 import { useDesktop } from '../context/DesktopContext'
+import { useKernel } from '../../os/context/KernelContext'
+import type { Kernel } from '../../os/Kernel'
 import { APPS, getApp } from '../apps'
+
+interface FileHit {
+  path: string
+  type: 'file' | 'dir'
+}
+
+/** Recursively searches the real VFS from `root`, matching entry names against `query`.
+ * Bounded (depth + result count) so a large home directory can't hang the UI. */
+function searchVfs(kernel: Kernel, root: string, query: string, limit = 8): FileHit[] {
+  const q = query.toLowerCase()
+  const results: FileHit[] = []
+
+  function walk(abs: string, depth: number) {
+    if (results.length >= limit || depth > 6) return
+    let entries: string[]
+    try {
+      entries = kernel.vfs.list(abs)
+    } catch {
+      return
+    }
+    for (const name of entries) {
+      if (results.length >= limit) return
+      const childAbs = abs === '/' ? `/${name}` : `${abs}/${name}`
+      const node = kernel.vfs.stat(childAbs)
+      if (!node) continue
+      if (name.toLowerCase().includes(q)) {
+        results.push({ path: childAbs, type: node.type === 'dir' ? 'dir' : 'file' })
+      }
+      if (node.type === 'dir') walk(childAbs, depth + 1)
+    }
+  }
+
+  walk(root, 0)
+  return results
+}
 
 export function ActivitiesOverview() {
   const ctx = useDesktop()
+  const { kernel, ready } = useKernel()
   const [query, setQuery] = useState('')
 
   const filtered = useMemo(
     () => APPS.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())),
     [query],
   )
+
+  const home = kernel.users.findByName(ctx.sessionUser ?? '')?.home ?? '/root'
+  const fileHits = useMemo(
+    () => (ready && query ? searchVfs(kernel, home, query) : []),
+    [kernel, ready, home, query],
+  )
+
+  const openFileHit = (hit: FileHit) => {
+    const cmd = hit.type === 'dir' ? `cd '${hit.path}' && ls -la` : `cat '${hit.path}'`
+    ctx.openApp('terminal', { runOnOpen: cmd })
+    ctx.setOverviewOpen(false)
+  }
 
   if (!ctx.overviewOpen) return null
 
@@ -49,21 +99,51 @@ export function ActivitiesOverview() {
       <div className="flex-1 flex flex-col items-center justify-center px-24" onClick={(e) => e.stopPropagation()}>
         {query ? (
           /* search results */
-          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', width: 'min(760px, 100%)' }}>
-            {filtered.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => ctx.openApp(a.id)}
-                className="app-grid-icon flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-white/10"
-              >
-                {a.icon}
-                <span className="text-white text-[13px]">{a.name}</span>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <div className="col-span-full text-center text-neutral-400 text-[14px] py-10">
-                No results for “{query}”
+          <div style={{ width: 'min(760px, 100%)' }}>
+            {filtered.length > 0 && (
+              <div className="grid gap-3 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                {filtered.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      ctx.openApp(a.id)
+                      ctx.setOverviewOpen(false)
+                    }}
+                    className="app-grid-icon flex flex-col items-center gap-2 p-4 rounded-2xl hover:bg-white/10"
+                  >
+                    {a.icon}
+                    <span className="text-white text-[13px]">{a.name}</span>
+                  </button>
+                ))}
               </div>
+            )}
+
+            {fileHits.length > 0 && (
+              <div>
+                <div className="text-[12px] font-semibold text-neutral-400 uppercase tracking-wide mb-2 px-1">
+                  Files
+                </div>
+                <div className="rounded-2xl bg-white/[0.06] divide-y divide-white/10 overflow-hidden">
+                  {fileHits.map((hit) => (
+                    <button
+                      key={hit.path}
+                      onClick={() => openFileHit(hit)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/10 text-left"
+                    >
+                      {hit.type === 'dir' ? (
+                        <Folder size={16} className="text-neutral-300 shrink-0" />
+                      ) : (
+                        <File size={16} className="text-neutral-300 shrink-0" />
+                      )}
+                      <span className="text-white text-[13px] truncate">{hit.path}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filtered.length === 0 && fileHits.length === 0 && (
+              <div className="text-center text-neutral-400 text-[14px] py-10">No results for “{query}”</div>
             )}
           </div>
         ) : openWins.length ? (

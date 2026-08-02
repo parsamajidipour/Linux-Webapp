@@ -146,4 +146,25 @@ describe('Kernel (phase 0 integration)', () => {
     expect(after.vfs.readFile('/home/bitx/note.txt')).toBe('hello')
     expect(after.vfs.readFile('/home/bitx/.bash_history')).toContain('pwd')
   })
+
+  it('notifies settings subscribers once persisted settings finish loading — regression test for phase 1.2', async () => {
+    // A UI component (DesktopContext) subscribes *before* boot() resolves, the same order
+    // React effects run in relative to the async KernelProvider boot. Without notifying
+    // listeners inside load(), a subscriber attached this early would never see the
+    // persisted value — it'd be stuck showing DEFAULT_SETTINGS forever.
+    const settingsStore = new MemoryAdapter()
+
+    const before = new Kernel({ settings: settingsStore })
+    await before.boot()
+    before.settings.set({ wallpaper: 'ocean' })
+
+    const after = new Kernel({ settings: settingsStore })
+    let seenWallpaper: string | undefined
+    after.settings.subscribe((s) => {
+      seenWallpaper = s.wallpaper
+    })
+    await after.boot()
+    expect(seenWallpaper).toBe('ocean')
+    expect(after.settings.get().wallpaper).toBe('ocean')
+  })
 })

@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
+import { useKernel } from '../../os/context/KernelContext'
 import type { AccentDef, Notification, SnapState, WallpaperId, WindowState } from '../types'
 
 export const ACCENTS: AccentDef[] = [
@@ -77,19 +78,20 @@ let winSeq = 0
 let notifSeq = 0
 
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
+  const { kernel } = useKernel()
   const [power, setPower] = useState<PowerState>('boot')
   const [sessionUser, setSessionUser] = useState<string | null>(null)
   const [windows, setWindows] = useState<WindowState[]>([])
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [appGridOpen, setAppGridOpen] = useState(false)
-  const [accent, setAccentState] = useState<AccentDef>(ACCENTS[0])
-  const [wallpaper, setWallpaper] = useState<WallpaperId>('noble')
-  const [darkStyle, setDarkStyle] = useState(false)
-  const [brightness, setBrightness] = useState(100)
-  const [volume, setVolume] = useState(72)
-  const [wifiOn, setWifiOn] = useState(true)
-  const [bluetoothOn, setBluetoothOn] = useState(true)
-  const [dockAutoHide, setDockAutoHide] = useState(false)
+
+  // Desktop prefs mirror kernel.settings (SettingsStore, IndexedDB-backed) so they survive a
+  // reload instead of living only in React state. `settings` is the one source of truth;
+  // the individual fields below (accent, wallpaper, ...) are derived from it, and their
+  // setters write back through kernel.settings.set() rather than setState directly.
+  const [settings, setSettings] = useState(() => kernel.settings.get())
+  useEffect(() => kernel.settings.subscribe(setSettings), [kernel])
+
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [now, setNow] = useState(() => new Date())
   const zCounter = useRef(10)
@@ -99,12 +101,31 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t)
   }, [])
 
-  const setAccent = useCallback((a: AccentDef) => {
-    setAccentState(a)
-    document.documentElement.style.setProperty('--ubuntu-accent', a.value)
-    document.documentElement.style.setProperty('--ubuntu-accent-hover', a.hover)
-    document.documentElement.style.setProperty('--ubuntu-accent-soft', `${a.value}29`)
-  }, [])
+  const accent = useMemo(() => ACCENTS.find((a) => a.name === settings.accent) ?? ACCENTS[0], [settings.accent])
+  const wallpaper = settings.wallpaper as WallpaperId
+  const darkStyle = settings.theme === 'dark'
+  const brightness = settings.brightness
+  const volume = settings.volume
+  const wifiOn = settings.wifiEnabled
+  const bluetoothOn = settings.bluetoothEnabled
+  const dockAutoHide = settings.dockAutoHide
+
+  // Applies whenever the accent changes for *any* reason — a user picking a new color, or a
+  // persisted accent loading in after boot — not just from inside setAccent.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ubuntu-accent', accent.value)
+    document.documentElement.style.setProperty('--ubuntu-accent-hover', accent.hover)
+    document.documentElement.style.setProperty('--ubuntu-accent-soft', `${accent.value}29`)
+  }, [accent])
+
+  const setAccent = useCallback((a: AccentDef) => kernel.settings.set({ accent: a.name }), [kernel])
+  const setWallpaper = useCallback((w: WallpaperId) => kernel.settings.set({ wallpaper: w }), [kernel])
+  const setDarkStyle = useCallback((v: boolean) => kernel.settings.set({ theme: v ? 'dark' : 'light' }), [kernel])
+  const setBrightness = useCallback((v: number) => kernel.settings.set({ brightness: v }), [kernel])
+  const setVolume = useCallback((v: number) => kernel.settings.set({ volume: v }), [kernel])
+  const setWifiOn = useCallback((v: boolean) => kernel.settings.set({ wifiEnabled: v }), [kernel])
+  const setBluetoothOn = useCallback((v: boolean) => kernel.settings.set({ bluetoothEnabled: v }), [kernel])
+  const setDockAutoHide = useCallback((v: boolean) => kernel.settings.set({ dockAutoHide: v }), [kernel])
 
   const pushNotification = useCallback((n: Omit<Notification, 'id'>) => {
     const id = ++notifSeq

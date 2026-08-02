@@ -15,7 +15,12 @@ export class SettingsStore {
   async load(): Promise<void> {
     if (!this.persistence) return
     const saved = await this.persistence.load<Settings>(PERSIST_KEY)
-    if (saved) this.state = { ...DEFAULT_SETTINGS, ...saved }
+    if (saved) {
+      this.state = { ...DEFAULT_SETTINGS, ...saved }
+      // Subscribers may have attached (e.g. UI mirroring state) before this async load
+      // resolved — without this, persisted settings would silently never reach them.
+      for (const listener of this.listeners) listener(this.state)
+    }
   }
 
   get(): Settings {

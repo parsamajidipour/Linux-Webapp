@@ -276,13 +276,19 @@ export function TopBar() {
                   <Lock size={13} /> Suspend
                 </button>
                 <button
-                  onClick={() => ctx.setPower('boot')}
+                  onClick={() => {
+                    ctx.logout()
+                    ctx.setPower('boot')
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-white/10 text-[12px]"
                 >
                   <RotateCcw size={13} /> Restart…
                 </button>
                 <button
-                  onClick={() => ctx.setPower('off')}
+                  onClick={() => {
+                    ctx.logout()
+                    ctx.setPower('off')
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-white/10 text-[12px] text-red-400"
                 >
                   <Power size={13} /> Power Off…

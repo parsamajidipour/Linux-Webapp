@@ -8,8 +8,6 @@ interface Line {
   cls?: string
 }
 
-const CURRENT_USER = 'bitx' // hardcoded until PLAN.md phase 1 (login) picks the active session user
-
 function formatCwd(cwd: string, home: string): string {
   if (cwd === home) return '~'
   if (cwd.startsWith(`${home}/`)) return `~${cwd.slice(home.length)}`
@@ -28,7 +26,13 @@ export function TerminalApp() {
   const [input, setInput] = useState('')
   const [sessionHistory, setSessionHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
-  const shellCtx = useMemo<ShellContext | null>(() => (ready ? kernel.createContext(CURRENT_USER) : null), [ready, kernel])
+  // Terminal only mounts once a session is active (power === 'desktop'), so sessionUser is set —
+  // the 'bitx' fallback only matters defensively (e.g. hot-reload edge cases).
+  const sessionUsername = desktop.sessionUser ?? 'bitx'
+  const shellCtx = useMemo<ShellContext | null>(
+    () => (ready ? kernel.createContext(sessionUsername) : null),
+    [ready, kernel, sessionUsername],
+  )
   const [, bump] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -53,7 +57,7 @@ export function TerminalApp() {
   const print = (newLines: Line[]) => setLines((prev) => [...prev, ...newLines])
 
   const promptLineFor = (raw: string): string => {
-    const home = kernel.users.findByName(shellCtx?.currentUser ?? CURRENT_USER)?.home ?? '/root'
+    const home = kernel.users.findByName(shellCtx?.currentUser ?? sessionUsername)?.home ?? '/root'
     return shellCtx
       ? `${shellCtx.currentUser}@${kernel.vfs.readFile('/etc/hostname').trim()}:${formatCwd(shellCtx.cwd, home)}$ ${raw}`
       : `$ ${raw}`
@@ -203,7 +207,7 @@ export function TerminalApp() {
     }
   }
 
-  const activeUser = shellCtx?.currentUser ?? CURRENT_USER
+  const activeUser = shellCtx?.currentUser ?? sessionUsername
   const home = kernel.users.findByName(activeUser)?.home ?? '/root'
   const promptCwd = shellCtx ? formatCwd(shellCtx.cwd, home) : '~'
   const hostname = ready ? kernel.vfs.readFile('/etc/hostname').trim() : 'ubuntu'

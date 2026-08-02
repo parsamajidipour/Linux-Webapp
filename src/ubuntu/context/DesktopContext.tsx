@@ -24,7 +24,13 @@ interface DesktopCtx {
   // power / session
   power: PowerState
   setPower: (p: PowerState) => void
-  unlock: () => void
+  /** Who's actually logged in — set by a successful LockScreen auth against the kernel's UserStore. */
+  sessionUser: string | null
+  /** Completes login as `username` and switches to the desktop. Locking again later re-prompts
+   * this same user (no picker) until `logout()` is called. */
+  unlock: (username: string) => void
+  /** Ends the session — used by Restart/Power Off so the next boot shows the user picker again. */
+  logout: () => void
   // windows
   windows: WindowState[]
   openApp: (appId: string, payload?: unknown) => void
@@ -72,6 +78,7 @@ let notifSeq = 0
 
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const [power, setPower] = useState<PowerState>('boot')
+  const [sessionUser, setSessionUser] = useState<string | null>(null)
   const [windows, setWindows] = useState<WindowState[]>([])
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [appGridOpen, setAppGridOpen] = useState(false)
@@ -201,7 +208,12 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
-  const unlock = useCallback(() => setPower('desktop'), [])
+  const unlock = useCallback((username: string) => {
+    setSessionUser(username)
+    setPower('desktop')
+  }, [])
+
+  const logout = useCallback(() => setSessionUser(null), [])
 
   const activeWindowId = useMemo(() => {
     const visible = windows.filter((w) => !w.minimized && !w.closing)
@@ -212,7 +224,9 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const value: DesktopCtx = {
     power,
     setPower,
+    sessionUser,
     unlock,
+    logout,
     windows,
     openApp,
     closeWindow,

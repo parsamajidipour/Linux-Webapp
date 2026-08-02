@@ -26,7 +26,6 @@ export interface AppDef {
   icon: ReactNode
   defaultSize: { w: number; h: number }
   minSize?: { w: number; h: number }
-  pinned: boolean
 }
 
 export interface Notification {

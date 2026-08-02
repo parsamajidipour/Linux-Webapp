@@ -32,6 +32,11 @@ interface DesktopCtx {
   unlock: (username: string) => void
   /** Ends the session — used by Restart/Power Off so the next boot shows the user picker again. */
   logout: () => void
+  /** Set from the GRUB-style "Advanced options" menu — the next boot drops straight into a
+   * root shell (real recovery-mode behavior) instead of the normal login picker. Consumed and
+   * reset by BootScreen once that boot finishes. */
+  recoveryMode: boolean
+  setRecoveryMode: (v: boolean) => void
   // windows
   windows: WindowState[]
   openApp: (appId: string, payload?: unknown) => void
@@ -64,6 +69,10 @@ interface DesktopCtx {
   setBluetoothOn: (v: boolean) => void
   dockAutoHide: boolean
   setDockAutoHide: (v: boolean) => void
+  /** App ids pinned to the Dock, in display order. */
+  pinnedApps: string[]
+  togglePinned: (appId: string) => void
+  reorderPinned: (order: string[]) => void
   // notifications
   /** Currently-visible toasts — auto-removed a few seconds after appearing. */
   notifications: Notification[]
@@ -85,6 +94,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const { kernel } = useKernel()
   const [power, setPower] = useState<PowerState>('boot')
   const [sessionUser, setSessionUser] = useState<string | null>(null)
+  const [recoveryMode, setRecoveryMode] = useState(false)
   const [windows, setWindows] = useState<WindowState[]>([])
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [appGridOpen, setAppGridOpen] = useState(false)
@@ -114,6 +124,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const wifiOn = settings.wifiEnabled
   const bluetoothOn = settings.bluetoothEnabled
   const dockAutoHide = settings.dockAutoHide
+  const pinnedApps = settings.pinnedApps
 
   // Applies whenever the accent changes for *any* reason — a user picking a new color, or a
   // persisted accent loading in after boot — not just from inside setAccent.
@@ -131,6 +142,15 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const setWifiOn = useCallback((v: boolean) => kernel.settings.set({ wifiEnabled: v }), [kernel])
   const setBluetoothOn = useCallback((v: boolean) => kernel.settings.set({ bluetoothEnabled: v }), [kernel])
   const setDockAutoHide = useCallback((v: boolean) => kernel.settings.set({ dockAutoHide: v }), [kernel])
+
+  const togglePinned = useCallback(
+    (appId: string) => {
+      const next = pinnedApps.includes(appId) ? pinnedApps.filter((id) => id !== appId) : [...pinnedApps, appId]
+      kernel.settings.set({ pinnedApps: next })
+    },
+    [kernel, pinnedApps],
+  )
+  const reorderPinned = useCallback((order: string[]) => kernel.settings.set({ pinnedApps: order }), [kernel])
 
   const pushNotification = useCallback((n: Omit<Notification, 'id'>) => {
     const id = ++notifSeq
@@ -258,6 +278,8 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     sessionUser,
     unlock,
     logout,
+    recoveryMode,
+    setRecoveryMode,
     windows,
     openApp,
     closeWindow,
@@ -287,6 +309,9 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     setBluetoothOn,
     dockAutoHide,
     setDockAutoHide,
+    pinnedApps,
+    togglePinned,
+    reorderPinned,
     notifications,
     notificationHistory,
     pushNotification,

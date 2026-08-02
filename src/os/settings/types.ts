@@ -8,6 +8,8 @@ export interface Settings {
   wifiEnabled: boolean
   bluetoothEnabled: boolean
   dockAutoHide: boolean
+  /** App ids pinned to the Dock, in display order. */
+  pinnedApps: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,4 +22,5 @@ export const DEFAULT_SETTINGS: Settings = {
   wifiEnabled: true,
   bluetoothEnabled: true,
   dockAutoHide: false,
+  pinnedApps: ['files', 'app-center', 'terminal', 'editor', 'calculator', 'sys-monitor', 'settings'],
 }

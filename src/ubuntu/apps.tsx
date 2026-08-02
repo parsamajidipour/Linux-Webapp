@@ -35,7 +35,6 @@ export const APPS: AppDef[] = [
     icon: <FilesIcon size={40} />,
     defaultSize: { w: 920, h: 580 },
     minSize: { w: 560, h: 380 },
-    pinned: true,
   },
   {
     id: 'app-center',
@@ -44,7 +43,6 @@ export const APPS: AppDef[] = [
     icon: <AppCenterIcon size={40} />,
     defaultSize: { w: 940, h: 600 },
     minSize: { w: 620, h: 420 },
-    pinned: true,
   },
   {
     id: 'terminal',
@@ -53,7 +51,6 @@ export const APPS: AppDef[] = [
     icon: <TerminalIcon size={40} />,
     defaultSize: { w: 760, h: 500 },
     minSize: { w: 420, h: 280 },
-    pinned: true,
   },
   {
     id: 'editor',
@@ -62,7 +59,6 @@ export const APPS: AppDef[] = [
     icon: <EditorIcon size={40} />,
     defaultSize: { w: 720, h: 540 },
     minSize: { w: 420, h: 320 },
-    pinned: true,
   },
   {
     id: 'calculator',
@@ -71,7 +67,6 @@ export const APPS: AppDef[] = [
     icon: <CalculatorIcon size={40} />,
     defaultSize: { w: 360, h: 520 },
     minSize: { w: 320, h: 480 },
-    pinned: true,
   },
   {
     id: 'sys-monitor',
@@ -80,7 +75,6 @@ export const APPS: AppDef[] = [
     icon: <MonitorIcon size={40} />,
     defaultSize: { w: 820, h: 560 },
     minSize: { w: 560, h: 400 },
-    pinned: true,
   },
   {
     id: 'settings',
@@ -89,7 +83,6 @@ export const APPS: AppDef[] = [
     icon: <SettingsIconTile size={40} />,
     defaultSize: { w: 900, h: 580 },
     minSize: { w: 640, h: 440 },
-    pinned: true,
   },
 ]
 

@@ -50,6 +50,21 @@ describe('phase 4.8 — package commands', () => {
     expect(kernel.vfs.exists('/usr/bin/bash')).toBe(true) // untouched
   })
 
+  it('a successful install emits a real notification event, but a no-op re-install does not', async () => {
+    const seen: string[] = []
+    const unsubscribe = kernel.notifications.subscribe((n) => seen.push(n.title))
+
+    await kernel.shell.run('sudo apt install tree', ctx)
+    expect(seen).toEqual(['Package installed'])
+
+    await kernel.shell.run('sudo apt install tree', ctx) // already installed — no new event
+    expect(seen).toEqual(['Package installed'])
+
+    await kernel.shell.run('sudo apt remove tree', ctx)
+    expect(seen).toEqual(['Package installed', 'Package removed'])
+    unsubscribe()
+  })
+
   it('apt search finds catalog matches without requiring root', async () => {
     const result = await kernel.shell.run('apt search docker', ctx)
     expect(result.exitCode).toBe(0)

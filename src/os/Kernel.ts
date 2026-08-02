@@ -1,5 +1,6 @@
 import { seedRootFilesystem } from './fs/seedRoot'
 import { renderProcMeminfo, renderProcUptime } from './fs/procFiles'
+import { NotificationBus } from './notifications'
 import { PackageManager } from './packages/PackageManager'
 import type { PersistenceAdapter } from './persistence/PersistenceAdapter'
 import { ProcessManager } from './process/ProcessManager'
@@ -14,6 +15,7 @@ import { registerPackageCommands } from './shell/commands/packages'
 import { registerPermissionCommands } from './shell/commands/permissions'
 import { registerProcessCommands } from './shell/commands/process'
 import { registerSearchCommands } from './shell/commands/search'
+import { registerServiceCommands } from './shell/commands/service'
 import { registerSystemCommands } from './shell/commands/system'
 import { registerTextCommands } from './shell/commands/text'
 import { registerUserCommands } from './shell/commands/user'
@@ -39,6 +41,7 @@ export class Kernel {
   readonly packages: PackageManager
   readonly services: ServiceManager
   readonly settings: SettingsStore
+  readonly notifications: NotificationBus
   readonly registry: CommandRegistry
   readonly shell: Shell
 
@@ -56,11 +59,13 @@ export class Kernel {
     this.packages = new PackageManager(persistence.packages)
     this.services = new ServiceManager()
     this.settings = new SettingsStore(persistence.settings)
+    this.notifications = new NotificationBus()
 
     this.registry = new CommandRegistry()
     registerNavigationCommands(this.registry)
     registerFileCommands(this.registry)
     registerSearchCommands(this.registry)
+    registerServiceCommands(this.registry)
     registerPermissionCommands(this.registry)
     registerUserCommands(this.registry)
     registerProcessCommands(this.registry)
@@ -111,6 +116,7 @@ export class Kernel {
       packages: this.packages,
       services: this.services,
       settings: this.settings,
+      notifications: this.notifications,
       registry: this.registry,
       currentUser: username,
       cwd: home,

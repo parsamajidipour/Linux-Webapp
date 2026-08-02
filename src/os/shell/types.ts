@@ -1,3 +1,4 @@
+import type { NotificationBus } from '../notifications'
 import type { PackageManager } from '../packages/PackageManager'
 import type { ProcessManager } from '../process/ProcessManager'
 import type { ServiceManager } from '../services/ServiceManager'
@@ -13,6 +14,9 @@ export interface ShellContext {
   packages: PackageManager
   services: ServiceManager
   settings: SettingsStore
+  /** Commands emit real OS events here (package installed, service started) — the desktop
+   * shell subscribes and turns them into notification toasts. */
+  notifications: NotificationBus
   /** Read-only introspection for commands like `type`/`command -v`. */
   registry: CommandRegistry
   /** Mutable — commands like `su` update this directly. */

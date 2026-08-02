@@ -208,7 +208,18 @@ export function TopBar() {
           <Calendar now={ctx.now} />
           <div className="mt-3 pt-3 border-t border-white/10">
             <div className="text-[12px] font-semibold text-neutral-300 mb-1.5">Notifications</div>
-            <div className="text-[12px] text-neutral-500 text-center py-2">No Notifications</div>
+            {ctx.notificationHistory.length === 0 ? (
+              <div className="text-[12px] text-neutral-500 text-center py-2">No Notifications</div>
+            ) : (
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {ctx.notificationHistory.map((n) => (
+                  <div key={n.id} className="px-2.5 py-1.5 rounded-lg bg-white/5">
+                    <div className="text-[12px] font-medium">{n.title}</div>
+                    <div className="text-[11px] text-neutral-400 truncate">{n.body}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

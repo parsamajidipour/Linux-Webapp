@@ -52,6 +52,7 @@ function aptDispatch(args: string[], ctx: ShellContext): CommandResult {
         ctx.vfs.writeFile(`/usr/bin/${bin}`, `[fake binary for package ${name}]`, { owner: 'root', group: 'root' })
         ctx.vfs.chmod(`/usr/bin/${bin}`, 0o755)
       }
+      ctx.notifications.emit({ app: 'Software', title: 'Package installed', body: result.message })
     }
     return ok(['Reading package lists... Done', 'Building dependency tree... Done', result.message].join('\n'))
   }
@@ -69,13 +70,16 @@ function aptDispatch(args: string[], ctx: ShellContext): CommandResult {
       const path = `/usr/bin/${bin}`
       if (ctx.vfs.exists(path)) ctx.vfs.remove(path)
     }
+    ctx.notifications.emit({ app: 'Software', title: 'Package removed', body: result.message })
     return ok(['Reading package lists... Done', result.message].join('\n'))
   }
 
   return ok('apt 2.7.14 (amd64)\nUsage: apt [update|install|remove|search|list --installed] ...')
 }
 
-/** PLAN.md phase 4.8 — Package: apt update/install/remove/search, dpkg. */
+/** PLAN.md phase 4.8 — Package: apt update/install/remove/search, dpkg.
+ * install/remove also emit a real notification event (phase 1.3) — nothing UI-only about it,
+ * they fire from the same code path whether a real user typed the command or a script did. */
 export function registerPackageCommands(registry: CommandRegistry): void {
   registry.register('apt', aptDispatch)
   registry.register('apt-get', aptDispatch)

@@ -65,7 +65,11 @@ interface DesktopCtx {
   dockAutoHide: boolean
   setDockAutoHide: (v: boolean) => void
   // notifications
+  /** Currently-visible toasts — auto-removed a few seconds after appearing. */
   notifications: Notification[]
+  /** Recent notifications that keep showing in the top-bar clock popover after their toast
+   * has disappeared, same as real GNOME's notification shade. Capped, not persisted. */
+  notificationHistory: Notification[]
   pushNotification: (n: Omit<Notification, 'id'>) => void
   dismissNotification: (id: number) => void
   // clock
@@ -93,6 +97,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => kernel.settings.subscribe(setSettings), [kernel])
 
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notificationHistory, setNotificationHistory] = useState<Notification[]>([])
   const [now, setNow] = useState(() => new Date())
   const zCounter = useRef(10)
 
@@ -130,6 +135,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const pushNotification = useCallback((n: Omit<Notification, 'id'>) => {
     const id = ++notifSeq
     setNotifications((prev) => [...prev, { ...n, id }])
+    setNotificationHistory((prev) => [{ ...n, id }, ...prev].slice(0, 20))
     window.setTimeout(() => {
       setNotifications((prev) => prev.filter((x) => x.id !== id))
     }, 4600)
@@ -138,6 +144,10 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const dismissNotification = useCallback((id: number) => {
     setNotifications((prev) => prev.filter((x) => x.id !== id))
   }, [])
+
+  // Real OS events (package installed, service started, ...) turn into toasts here — the
+  // kernel has no idea a UI exists, it just emits; this is the only place that listens.
+  useEffect(() => kernel.notifications.subscribe(pushNotification), [kernel, pushNotification])
 
   const focusWindow = useCallback((id: string) => {
     setWindows((prev) =>
@@ -278,6 +288,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     dockAutoHide,
     setDockAutoHide,
     notifications,
+    notificationHistory,
     pushNotification,
     dismissNotification,
     now,

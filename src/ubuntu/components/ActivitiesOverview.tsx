@@ -4,6 +4,8 @@ import { useDesktop } from '../context/DesktopContext'
 import { useKernel } from '../../os/context/KernelContext'
 import type { Kernel } from '../../os/Kernel'
 import { APPS, getApp } from '../apps'
+import { kindOf } from '../fileKind'
+import { basename, dirname } from '../../os/vfs/path'
 
 interface FileHit {
   path: string
@@ -57,8 +59,25 @@ export function ActivitiesOverview() {
   )
 
   const openFileHit = (hit: FileHit) => {
-    const cmd = hit.type === 'dir' ? `cd '${hit.path}' && ls -la` : `cat '${hit.path}'`
-    ctx.openApp('terminal', { runOnOpen: cmd })
+    if (hit.type === 'dir') {
+      ctx.openApp('files', { path: hit.path })
+      ctx.setOverviewOpen(false)
+      return
+    }
+    const node = kernel.vfs.stat(hit.path)
+    const kind = node ? kindOf(node, basename(hit.path)) : 'other'
+    if (kind === 'text') {
+      try {
+        const content = kernel.vfs.readFile(hit.path, { actor: kernel.users.toSubject(ctx.sessionUser ?? '') })
+        ctx.openApp('editor', { path: hit.path, name: basename(hit.path), content })
+      } catch {
+        ctx.openApp('files', { path: dirname(hit.path) })
+      }
+    } else {
+      // No viewer/player app exists yet — land in Files, right next to the file, like a
+      // real DE falling back to "show in folder" when it has nothing to open something with.
+      ctx.openApp('files', { path: dirname(hit.path) })
+    }
     ctx.setOverviewOpen(false)
   }
 

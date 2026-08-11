@@ -6,91 +6,63 @@ import {
   Clock,
   Download,
   FileText,
+  FilePlus,
+  FolderPlus,
   Film,
   Folder,
+  FolderOpen,
   HardDrive,
   Home,
   Image as ImageIcon,
   List,
   Music,
   Search,
-  Star,
   Trash2,
   File as FileIcon,
+  Link2,
 } from 'lucide-react'
 import { useWinTheme } from '../winTheme'
 import { useDesktop } from '../context/DesktopContext'
+import { useKernel } from '../../os/context/KernelContext'
+import { basename, dirname } from '../../os/vfs/path'
+import type { Inode } from '../../os/vfs/types'
+import { kindOf, type FileKind } from '../fileKind'
 
-interface FsItem {
+interface Entry {
   name: string
-  type: 'folder' | 'text' | 'image' | 'audio' | 'video' | 'archive' | 'iso' | 'doc'
-  size?: string
-  modified?: string
-  content?: string
-  children?: FsItem[]
+  abs: string
+  node: Inode
+  kind: FileKind
 }
 
-const HOME_CHILDREN: FsItem[] = [
-  { name: 'Desktop', type: 'folder', children: [], modified: 'Today, 09:14' },
-  {
-    name: 'Documents',
-    type: 'folder',
-    modified: 'Today, 11:02',
-    children: [
-      {
-        name: 'welcome.txt',
-        type: 'text',
-        size: '248 B',
-        modified: 'Today, 11:02',
-        content:
-          'Welcome to Ubuntu Web Desktop!\n\nThis entire desktop environment runs in your browser.\n\nThings to try:\n  - Press Activities (top-left) for the overview\n  - Drag windows to screen edges to snap them\n  - Right-click the desktop for options\n  - Open the terminal and type "neofetch"',
-      },
-      {
-        name: 'notes.md',
-        type: 'text',
-        size: '182 B',
-        modified: 'Today, 10:47',
-        content: '# My Notes\n\n- This desktop is fully interactive\n- Windows can be moved, resized and snapped\n- Settings lets you change accent color and wallpaper\n\nEnjoy exploring!',
-      },
-      { name: 'project-proposal.odt', type: 'doc', size: '84.2 kB', modified: 'Yesterday, 16:20' },
-      { name: 'budget-2026.ods', type: 'doc', size: '41.7 kB', modified: 'Jul 14, 13:55' },
-    ],
-  },
-  {
-    name: 'Downloads',
-    type: 'folder',
-    modified: 'Jul 16, 18:31',
-    children: [
-      { name: 'ubuntu-24.04.2-desktop-amd64.iso', type: 'iso', size: '5.8 GB', modified: 'Jul 16, 18:31' },
-      { name: 'wallpapers-pack.zip', type: 'archive', size: '12.4 MB', modified: 'Jul 12, 09:05' },
-    ],
-  },
-  {
-    name: 'Pictures',
-    type: 'folder',
-    modified: 'Jul 10, 20:12',
-    children: [
-      { name: 'jellyfish-noble.png', type: 'image', size: '3.2 MB', modified: 'Jul 10, 20:12' },
-      { name: 'sunset-canyon.jpg', type: 'image', size: '2.1 MB', modified: 'Jul 08, 19:44' },
-      { name: 'screenshot-2026-07-18.png', type: 'image', size: '912 kB', modified: 'Jul 05, 08:31' },
-    ],
-  },
-  { name: 'Music', type: 'folder', children: [], modified: 'Jun 28, 15:00' },
-  { name: 'Videos', type: 'folder', children: [], modified: 'Jun 21, 11:38' },
-]
+const TOTAL_DISK_BYTES = 20 * 1024 * 1024 * 1024
 
-const SIDEBAR = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'desktop', label: 'Desktop', icon: HardDrive },
-  { id: 'documents', label: 'Documents', icon: FileText },
-  { id: 'downloads', label: 'Downloads', icon: Download },
-  { id: 'music', label: 'Music', icon: Music },
-  { id: 'pictures', label: 'Pictures', icon: ImageIcon },
-  { id: 'videos', label: 'Videos', icon: Film },
-]
+function humanBytes(bytes: number): string {
+  const units = ['B', 'K', 'M', 'G', 'T']
+  let v = bytes
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  return `${v.toFixed(1)} ${units[i]}`
+}
 
-function itemIcon(item: FsItem, size = 34) {
-  switch (item.type) {
+function relTime(ms: number): string {
+  const d = new Date(ms)
+  const now = new Date()
+  const sameDay = d.toDateString() === now.toDateString()
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  if (sameDay) return `Today, ${time}`
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`
+}
+
+function join(dir: string, name: string): string {
+  return dir === '/' ? `/${name}` : `${dir}/${name}`
+}
+
+function itemIcon(kind: FileKind, size = 34) {
+  switch (kind) {
     case 'folder':
       return <Folder size={size} fill="#e8a87c" color="#c97b4a" strokeWidth={1.2} />
     case 'text':
@@ -105,130 +77,324 @@ function itemIcon(item: FsItem, size = 34) {
       return <FileIcon size={size} color="#c4a000" strokeWidth={1.4} />
     case 'iso':
       return <HardDrive size={size} color="#888a85" strokeWidth={1.4} />
+    case 'symlink':
+      return <Link2 size={size} color="#729fcf" strokeWidth={1.4} />
     default:
       return <FileIcon size={size} color="#8a8a82" strokeWidth={1.4} />
   }
 }
 
-function folderOf(place: string): FsItem[] {
-  switch (place) {
-    case 'home':
-      return HOME_CHILDREN
-    case 'desktop':
-      return HOME_CHILDREN[0].children ?? []
-    case 'documents':
-      return HOME_CHILDREN[1].children ?? []
-    case 'downloads':
-      return HOME_CHILDREN[2].children ?? []
-    case 'pictures':
-      return HOME_CHILDREN[3].children ?? []
-    case 'music':
-      return HOME_CHILDREN[4].children ?? []
-    case 'videos':
-      return HOME_CHILDREN[5].children ?? []
-    default:
-      return []
-  }
+interface ContextMenuState {
+  x: number
+  y: number
+  targetName: string | null
 }
 
-export function FilesApp() {
+interface FilesPayload {
+  path?: string
+}
+
+export function FilesApp({ payload }: { payload?: unknown }) {
   const t = useWinTheme()
-  const { openApp, darkStyle } = useDesktop()
-  const [place, setPlace] = useState('home')
-  const [stack, setStack] = useState<string[][]>([])
-  const [stackIdx, setStackIdx] = useState(-1)
-  const [path, setPath] = useState<string[]>([])
+  const { openApp, darkStyle, sessionUser, pushNotification } = useDesktop()
+  const { kernel } = useKernel()
+
+  const username = sessionUser ?? 'root'
+  const home = kernel.users.findByName(username)?.home ?? '/root'
+  const actor = kernel.users.toSubject(username)
+
+  const trashDir = `${home}/.local/share/Trash/files`
+  const trashInfoDir = `${home}/.local/share/Trash/info`
+
+  const startPath = (payload as FilesPayload | undefined)?.path ?? home
+  const [cwd, setCwd] = useState(startPath)
+  const [history, setHistory] = useState<string[]>([startPath])
+  const [historyIdx, setHistoryIdx] = useState(0)
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [listView, setListView] = useState(false)
+  const [version, setVersion] = useState(0)
+  const [renaming, setRenaming] = useState<{ name: string; value: string } | null>(null)
+  const [clipboard, setClipboard] = useState<{ abs: string; mode: 'copy' | 'cut' } | null>(null)
+  const [menu, setMenu] = useState<ContextMenuState | null>(null)
 
-  const items = useMemo(() => {
-    let items = folderOf(place)
-    if (path.length > 0) {
-      let cur: FsItem[] = HOME_CHILDREN
-      for (const seg of path) {
-        const next = cur.find((i) => i.name === seg && i.type === 'folder')
-        if (!next) return []
-        cur = next.children ?? []
-      }
-      items = cur
-    }
-    if (query) items = items.filter((i) => i.name.toLowerCase().includes(query.toLowerCase()))
-    return items
-  }, [place, path, query])
+  const bump = () => setVersion((v) => v + 1)
+  const notifyError = (title: string, e: unknown) =>
+    pushNotification({ app: 'Files', title, body: e instanceof Error ? e.message : String(e) })
 
-  const crumbs = useMemo(() => {
-    const rootLabel = SIDEBAR.find((s) => s.id === place)?.label ?? 'Home'
-    return [rootLabel, ...path]
-  }, [place, path])
+  const isTrash = cwd === trashDir
 
-  const navigateTo = (newPlace: string, newPath: string[]) => {
-    const entry = [newPlace, ...newPath]
-    const newStack = [...stack.slice(0, stackIdx + 1), entry]
-    setStack(newStack)
-    setStackIdx(newStack.length - 1)
-    setPlace(newPlace)
-    setPath(newPath)
+  const navigate = (path: string) => {
+    const newHist = [...history.slice(0, historyIdx + 1), path]
+    setHistory(newHist)
+    setHistoryIdx(newHist.length - 1)
+    setCwd(path)
     setSelected(null)
+    setQuery('')
+  }
+
+  // Window already open + a new file/folder picked from Activities search re-triggers
+  // openApp() with a fresh payload rather than remounting. Adjusting state during render
+  // (React's recommended pattern) avoids the extra render an effect-based sync would cost.
+  const [syncedPayload, setSyncedPayload] = useState(payload)
+  if (payload !== syncedPayload) {
+    setSyncedPayload(payload)
+    const nextPath = (payload as FilesPayload | undefined)?.path
+    if (nextPath) navigate(nextPath)
   }
 
   const goBack = () => {
-    if (stackIdx > 0) {
-      const entry = stack[stackIdx - 1]
-      setStackIdx(stackIdx - 1)
-      setPlace(entry[0])
-      setPath(entry.slice(1))
-      setSelected(null)
-    }
+    if (historyIdx <= 0) return
+    setHistoryIdx(historyIdx - 1)
+    setCwd(history[historyIdx - 1])
+    setSelected(null)
   }
-
   const goForward = () => {
-    if (stackIdx < stack.length - 1) {
-      const entry = stack[stackIdx + 1]
-      setStackIdx(stackIdx + 1)
-      setPlace(entry[0])
-      setPath(entry.slice(1))
-      setSelected(null)
+    if (historyIdx >= history.length - 1) return
+    setHistoryIdx(historyIdx + 1)
+    setCwd(history[historyIdx + 1])
+    setSelected(null)
+  }
+
+  const goSidebar = (path: string) => {
+    if (!kernel.vfs.exists(path)) {
+      try {
+        kernel.vfs.mkdir(path, { parents: true, actor })
+        bump()
+      } catch {
+        /* not creatable (e.g. no permission) — navigate anyway, will show empty state */
+      }
+    }
+    navigate(path)
+  }
+
+  const entries: Entry[] = useMemo(() => {
+    let names: string[]
+    try {
+      names = kernel.vfs.list(cwd)
+    } catch {
+      return []
+    }
+    const list = names
+      .map((name): Entry | null => {
+        const abs = join(cwd, name)
+        const node = kernel.vfs.stat(abs)
+        if (!node) return null
+        return { name, abs, node, kind: kindOf(node, name) }
+      })
+      .filter((e): e is Entry => e !== null)
+      .filter((e) => !query || e.name.toLowerCase().includes(query.toLowerCase()))
+    list.sort((a, b) => {
+      if (a.kind === 'folder' && b.kind !== 'folder') return -1
+      if (a.kind !== 'folder' && b.kind === 'folder') return 1
+      return a.name.localeCompare(b.name)
+    })
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cwd, query, version, kernel])
+
+  const crumbs = useMemo(() => {
+    const underHome = cwd === home || cwd.startsWith(home + '/')
+    if (underHome) {
+      const rest = cwd === home ? [] : cwd.slice(home.length + 1).split('/')
+      return [{ label: 'Home', path: home }, ...rest.map((seg, i) => ({ label: seg, path: home + '/' + rest.slice(0, i + 1).join('/') }))]
+    }
+    const parts = cwd.split('/').filter(Boolean)
+    return [{ label: 'Computer', path: '/' }, ...parts.map((seg, i) => ({ label: seg, path: '/' + parts.slice(0, i + 1).join('/') }))]
+  }, [cwd, home])
+
+  const freeUsed = kernel.vfs.sizeOf('/')
+
+  const readTrashInfoPath = (name: string): string | null => {
+    try {
+      const info = kernel.vfs.readFile(join(trashInfoDir, `${name}.trashinfo`), { actor })
+      const m = /^Path=(.*)$/m.exec(info)
+      return m ? m[1] : null
+    } catch {
+      return null
     }
   }
 
-  const openItem = (item: FsItem) => {
-    if (item.type === 'folder') {
-      if (place === 'home' && path.length === 0) {
-        const map: Record<string, string> = {
-          Desktop: 'desktop',
-          Documents: 'documents',
-          Downloads: 'downloads',
-          Pictures: 'pictures',
-          Music: 'music',
-          Videos: 'videos',
-        }
-        if (map[item.name]) {
-          navigateTo(map[item.name], [])
-          return
+  const moveToTrash = (entry: Entry) => {
+    try {
+      kernel.vfs.mkdir(trashDir, { parents: true, actor })
+      kernel.vfs.mkdir(trashInfoDir, { parents: true, actor })
+      let name = entry.name
+      let n = 1
+      while (kernel.vfs.exists(join(trashDir, name))) {
+        name = `${entry.name}.${++n}`
+      }
+      kernel.vfs.move(entry.abs, join(trashDir, name), { actor })
+      kernel.vfs.writeFile(join(trashInfoDir, `${name}.trashinfo`), `[Trash Info]\nPath=${entry.abs}\nDeletionDate=${new Date().toISOString()}\n`, { actor })
+      void kernel.persist()
+      bump()
+      if (selected === entry.name) setSelected(null)
+    } catch (e) {
+      notifyError(`Couldn't move "${entry.name}" to Trash`, e)
+    }
+  }
+
+  const restoreFromTrash = (entry: Entry) => {
+    const original = readTrashInfoPath(entry.name)
+    if (!original) {
+      notifyError('Restore failed', `No record of the original location for "${entry.name}"`)
+      return
+    }
+    try {
+      kernel.vfs.mkdir(dirname(original), { parents: true, actor })
+      kernel.vfs.move(entry.abs, original, { actor })
+      kernel.vfs.remove(join(trashInfoDir, `${entry.name}.trashinfo`), { actor })
+      void kernel.persist()
+      bump()
+    } catch (e) {
+      notifyError(`Couldn't restore "${entry.name}"`, e)
+    }
+  }
+
+  const deletePermanently = (entry: Entry) => {
+    if (!window.confirm(`Permanently delete "${entry.name}"? This cannot be undone.`)) return
+    try {
+      kernel.vfs.remove(entry.abs, { recursive: true, actor })
+      if (isTrash) {
+        try {
+          kernel.vfs.remove(join(trashInfoDir, `${entry.name}.trashinfo`), { actor })
+        } catch {
+          /* no companion info file — fine */
         }
       }
-      navigateTo(place, [...path, item.name])
-    } else if (item.type === 'text' && item.content !== undefined) {
-      openApp('editor', { name: item.name, content: item.content })
+      void kernel.persist()
+      bump()
+      if (selected === entry.name) setSelected(null)
+    } catch (e) {
+      notifyError(`Couldn't delete "${entry.name}"`, e)
     }
   }
 
-  const isTrash = place === 'trash'
+  const emptyTrash = () => {
+    if (entries.length === 0) return
+    if (!window.confirm('Empty Trash? All items will be permanently deleted.')) return
+    for (const e of entries) {
+      try {
+        kernel.vfs.remove(e.abs, { recursive: true, actor })
+        kernel.vfs.remove(join(trashInfoDir, `${e.name}.trashinfo`), { actor })
+      } catch {
+        /* best-effort cleanup */
+      }
+    }
+    void kernel.persist()
+    bump()
+  }
+
+  const uniqueName = (dir: string, base: string): string => {
+    if (!kernel.vfs.exists(join(dir, base))) return base
+    const dot = base.lastIndexOf('.')
+    const hasExt = dot > 0 && dot < base.length - 1
+    const stem = hasExt ? base.slice(0, dot) : base
+    const ext = hasExt ? base.slice(dot) : ''
+    let n = 2
+    while (kernel.vfs.exists(join(dir, `${stem} ${n}${ext}`))) n++
+    return `${stem} ${n}${ext}`
+  }
+
+  const newFolder = () => {
+    const name = uniqueName(cwd, 'New Folder')
+    try {
+      kernel.vfs.mkdir(join(cwd, name), { actor })
+      void kernel.persist()
+      bump()
+      setSelected(name)
+      setRenaming({ name, value: name })
+    } catch (e) {
+      notifyError("Couldn't create folder", e)
+    }
+  }
+
+  const commitRename = () => {
+    if (!renaming) return
+    const { name, value } = renaming
+    const newName = value.trim()
+    setRenaming(null)
+    if (!newName || newName === name) return
+    try {
+      kernel.vfs.move(join(cwd, name), join(cwd, newName), { actor })
+      void kernel.persist()
+      bump()
+      setSelected(newName)
+    } catch (e) {
+      notifyError(`Couldn't rename "${name}"`, e)
+    }
+  }
+
+  const cancelRename = () => setRenaming(null)
+
+  const pasteClipboard = () => {
+    if (!clipboard) return
+    const name = basename(clipboard.abs)
+    const destName = uniqueName(cwd, name)
+    try {
+      if (clipboard.mode === 'copy') {
+        const srcNode = kernel.vfs.stat(clipboard.abs)
+        kernel.vfs.copy(clipboard.abs, join(cwd, destName), { recursive: srcNode?.type === 'dir', actor })
+      } else {
+        kernel.vfs.move(clipboard.abs, join(cwd, destName), { actor })
+        setClipboard(null)
+      }
+      void kernel.persist()
+      bump()
+    } catch (e) {
+      notifyError('Paste failed', e)
+    }
+  }
+
+  const openItem = (entry: Entry) => {
+    if (isTrash) return
+    if (entry.kind === 'folder') {
+      navigate(entry.abs)
+      return
+    }
+    if (entry.kind === 'text') {
+      try {
+        const content = kernel.vfs.readFile(entry.abs, { actor })
+        openApp('editor', { path: entry.abs, name: entry.name, content })
+      } catch (e) {
+        notifyError(`Couldn't open "${entry.name}"`, e)
+      }
+      return
+    }
+    pushNotification({ app: 'Files', title: entry.name, body: 'No application is available to open this file.' })
+  }
+
+  const openMenu = (e: React.MouseEvent, targetName: string | null) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (targetName) setSelected(targetName)
+    setMenu({ x: e.clientX, y: e.clientY, targetName })
+  }
+
+  const closeMenu = () => setMenu(null)
+  const menuEntry = menu?.targetName ? entries.find((e) => e.name === menu.targetName) ?? null : null
 
   return (
-    <div className={`flex h-full ${t.bg} ${t.text}`}>
+    <div className={`flex h-full ${t.bg} ${t.text}`} onClick={closeMenu}>
       {/* Sidebar */}
       <div className={`w-44 shrink-0 ${t.bgSidebar} flex flex-col py-2 border-r ${t.border}`}>
         <div className="flex-1 overflow-y-auto ubuntu-scroll">
-          {SIDEBAR.map((s) => (
+          {[
+            { label: 'Home', path: home, icon: Home },
+            { label: 'Desktop', path: `${home}/Desktop`, icon: HardDrive },
+            { label: 'Documents', path: `${home}/Documents`, icon: FileText },
+            { label: 'Downloads', path: `${home}/Downloads`, icon: Download },
+            { label: 'Music', path: `${home}/Music`, icon: Music },
+            { label: 'Pictures', path: `${home}/Pictures`, icon: ImageIcon },
+            { label: 'Videos', path: `${home}/Videos`, icon: Film },
+          ].map((s) => (
             <button
-              key={s.id}
-              onClick={() => navigateTo(s.id, [])}
+              key={s.path}
+              onClick={() => goSidebar(s.path)}
               className={`w-full flex items-center gap-2.5 px-4 py-[7px] text-[13px] ${t.hover} ${
-                place === s.id ? `${t.active} font-medium` : ''
+                cwd === s.path ? `${t.active} font-medium` : ''
               }`}
-              style={place === s.id ? { boxShadow: `inset 3px 0 0 var(--ubuntu-accent)` } : undefined}
+              style={cwd === s.path ? { boxShadow: `inset 3px 0 0 var(--ubuntu-accent)` } : undefined}
             >
               <s.icon size={16} className={t.textDim} />
               {s.label}
@@ -236,7 +402,18 @@ export function FilesApp() {
           ))}
           <div className={`mx-3 my-2 h-px ${t.divider}`} />
           <button
-            onClick={() => navigateTo('trash', [])}
+            onClick={() => navigate('/')}
+            className={`w-full flex items-center gap-2.5 px-4 py-[7px] text-[13px] ${t.hover} ${
+              cwd === '/' ? `${t.active} font-medium` : ''
+            }`}
+            style={cwd === '/' ? { boxShadow: `inset 3px 0 0 var(--ubuntu-accent)` } : undefined}
+          >
+            <HardDrive size={16} className={t.textDim} />
+            Other Locations
+          </button>
+          <div className={`mx-3 my-2 h-px ${t.divider}`} />
+          <button
+            onClick={() => navigate(trashDir)}
             className={`w-full flex items-center gap-2.5 px-4 py-[7px] text-[13px] ${t.hover} ${
               isTrash ? `${t.active} font-medium` : ''
             }`}
@@ -247,8 +424,10 @@ export function FilesApp() {
           </button>
         </div>
         <div className={`px-4 py-2 flex items-center gap-2 text-[11px] ${t.textDim}`}>
-          <Star size={12} />
-          <span>82.4 GB free of 256 GB</span>
+          <HardDrive size={12} />
+          <span>
+            {humanBytes(TOTAL_DISK_BYTES - freeUsed)} free of {humanBytes(TOTAL_DISK_BYTES)}
+          </span>
         </div>
       </div>
 
@@ -256,62 +435,52 @@ export function FilesApp() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         <div className={`flex items-center gap-2 px-3 py-2 border-b ${t.border} ${t.bgToolbar}`}>
-          <button
-            onClick={goBack}
-            disabled={stackIdx <= 0}
-            className={`p-1.5 rounded ${t.hover} disabled:opacity-30`}
-          >
+          <button onClick={goBack} disabled={historyIdx <= 0} className={`p-1.5 rounded ${t.hover} disabled:opacity-30`}>
             <ArrowLeft size={16} />
           </button>
-          <button
-            onClick={goForward}
-            disabled={stackIdx >= stack.length - 1}
-            className={`p-1.5 rounded ${t.hover} disabled:opacity-30`}
-          >
+          <button onClick={goForward} disabled={historyIdx >= history.length - 1} className={`p-1.5 rounded ${t.hover} disabled:opacity-30`}>
             <ArrowRight size={16} />
           </button>
           <div className={`flex items-center gap-0.5 text-[13px] px-2 py-1 rounded ${t.active} min-w-0 overflow-hidden`}>
             {crumbs.map((c, i) => (
-              <span key={i} className="flex items-center gap-0.5 whitespace-nowrap">
+              <span key={c.path} className="flex items-center gap-0.5 whitespace-nowrap">
                 {i > 0 && <ChevronRight size={13} className={t.textDim} />}
-                <button
-                  className={`px-1 rounded ${t.hover} ${i === crumbs.length - 1 ? 'font-semibold' : ''}`}
-                  onClick={() => navigateTo(place, path.slice(0, i - 0))}
-                >
-                  {c}
+                <button className={`px-1 rounded ${t.hover} ${i === crumbs.length - 1 ? 'font-semibold' : ''}`} onClick={() => navigate(c.path)}>
+                  {c.label}
                 </button>
               </span>
             ))}
           </div>
+          {!isTrash && (
+            <button onClick={newFolder} title="New Folder" className={`p-1.5 rounded ${t.hover}`}>
+              <FolderPlus size={16} />
+            </button>
+          )}
+          {isTrash && entries.length > 0 && (
+            <button onClick={emptyTrash} className={`px-2.5 py-1 rounded text-[12px] ${t.hover}`}>
+              Empty Trash
+            </button>
+          )}
           <div className="flex-1" />
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border ${t.border} ${t.input} text-[12px] w-44`}>
             <Search size={13} className="opacity-60" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search"
-              className="bg-transparent outline-none w-full"
-            />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" className="bg-transparent outline-none w-full" />
           </div>
-          <button
-            onClick={() => setListView(!listView)}
-            className={`p-1.5 rounded ${t.hover} ${listView ? t.active : ''}`}
-          >
+          <button onClick={() => setListView(!listView)} className={`p-1.5 rounded ${t.hover} ${listView ? t.active : ''}`}>
             <List size={16} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto ubuntu-scroll p-3" onClick={() => setSelected(null)}>
-          {isTrash ? (
+        <div
+          className="flex-1 overflow-y-auto ubuntu-scroll p-3"
+          onClick={() => setSelected(null)}
+          onContextMenu={(e) => openMenu(e, null)}
+        >
+          {entries.length === 0 ? (
             <div className={`h-full flex flex-col items-center justify-center gap-3 ${t.textDim}`}>
-              <Trash2 size={64} strokeWidth={1} />
-              <div className="text-lg font-medium">Trash is Empty</div>
-            </div>
-          ) : items.length === 0 ? (
-            <div className={`h-full flex flex-col items-center justify-center gap-3 ${t.textDim}`}>
-              <Folder size={64} strokeWidth={1} />
-              <div className="text-lg font-medium">Folder is Empty</div>
+              {isTrash ? <Trash2 size={64} strokeWidth={1} /> : <FolderOpen size={64} strokeWidth={1} />}
+              <div className="text-lg font-medium">{isTrash ? 'Trash is Empty' : query ? 'No Results' : 'Folder is Empty'}</div>
             </div>
           ) : listView ? (
             <table className="w-full text-[13px]">
@@ -323,58 +492,69 @@ export function FilesApp() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {entries.map((entry) => (
                   <tr
-                    key={item.name}
+                    key={entry.name}
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSelected(item.name)
+                      setSelected(entry.name)
                     }}
-                    onDoubleClick={() => openItem(item)}
-                    className={`cursor-default rounded ${
-                      selected === item.name ? '' : t.hover
-                    }`}
-                    style={
-                      selected === item.name
-                        ? { background: 'var(--ubuntu-accent)', color: '#fff' }
-                        : undefined
-                    }
+                    onDoubleClick={() => openItem(entry)}
+                    onContextMenu={(e) => openMenu(e, entry.name)}
+                    className={`cursor-default rounded ${selected === entry.name ? '' : t.hover}`}
+                    style={selected === entry.name ? { background: 'var(--ubuntu-accent)', color: '#fff' } : undefined}
                   >
                     <td className="px-3 py-1.5 flex items-center gap-2.5">
-                      {itemIcon(item, 18)}
-                      {item.name}
+                      {itemIcon(entry.kind, 18)}
+                      {renaming?.name === entry.name ? (
+                        <RenameInput
+                          value={renaming.value}
+                          onChange={(v) => setRenaming({ name: entry.name, value: v })}
+                          onCommit={commitRename}
+                          onCancel={cancelRename}
+                        />
+                      ) : (
+                        entry.name
+                      )}
                     </td>
-                    <td className="px-3 py-1.5">{item.type === 'folder' ? `${item.children?.length ?? 0} items` : item.size}</td>
-                    <td className="px-3 py-1.5">{item.modified}</td>
+                    <td className="px-3 py-1.5">{entry.node.type === 'dir' ? `${kernel.vfs.list(entry.abs).length} items` : humanBytes(kernel.vfs.sizeOf(entry.abs))}</td>
+                    <td className="px-3 py-1.5">{relTime(entry.node.mtime)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
             <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
-              {items.map((item) => (
+              {entries.map((entry) => (
                 <button
-                  key={item.name}
+                  key={entry.name}
                   onClick={(e) => {
                     e.stopPropagation()
-                    setSelected(item.name)
+                    setSelected(entry.name)
                   }}
-                  onDoubleClick={() => openItem(item)}
+                  onDoubleClick={() => openItem(entry)}
+                  onContextMenu={(e) => openMenu(e, entry.name)}
                   className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-lg ${t.hover}`}
                   style={
-                    selected === item.name
+                    selected === entry.name
                       ? { background: 'var(--ubuntu-accent-soft)', boxShadow: `inset 0 0 0 1.5px var(--ubuntu-accent)` }
                       : undefined
                   }
                 >
-                  {itemIcon(item, 36)}
-                  <span
-                    className={`text-[12px] text-center leading-tight break-words w-full line-clamp-2 ${
-                      selected === item.name ? 'font-medium' : ''
-                    }`}
-                  >
-                    {item.name}
-                  </span>
+                  {itemIcon(entry.kind, 36)}
+                  {renaming?.name === entry.name ? (
+                    <RenameInput
+                      value={renaming.value}
+                      onChange={(v) => setRenaming({ name: entry.name, value: v })}
+                      onCommit={commitRename}
+                      onCancel={cancelRename}
+                      center
+                    />
+                  ) : (
+                    <span className={`text-[12px] text-center leading-tight break-words w-full line-clamp-2 ${selected === entry.name ? 'font-medium' : ''}`}>
+                      {entry.name}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -382,17 +562,104 @@ export function FilesApp() {
         </div>
 
         {/* Status bar */}
-        <div
-          className={`px-3 py-1 text-[12px] ${t.textDim} border-t ${t.border} flex items-center gap-2`}
-        >
+        <div className={`px-3 py-1 text-[12px] ${t.textDim} border-t ${t.border} flex items-center gap-2`}>
           <Clock size={11} />
           <span>
-            {isTrash ? '0 items' : `${items.length} item${items.length === 1 ? '' : 's'}`}
+            {entries.length} item{entries.length === 1 ? '' : 's'}
             {selected ? ` — "${selected}" selected` : ''}
           </span>
           <span className="ml-auto">{darkStyle ? 'Dark style' : 'Light style'}</span>
         </div>
       </div>
+
+      {/* Context menu */}
+      {menu && (
+        <div
+          className="fixed z-[700] popover-glass rounded-lg p-1 w-52 text-white text-[13px] slide-up"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {isTrash ? (
+            menuEntry ? (
+              <>
+                <MenuItem onClick={() => (restoreFromTrash(menuEntry), closeMenu())}>Restore</MenuItem>
+                <MenuItem onClick={() => (deletePermanently(menuEntry), closeMenu())}>Delete Permanently</MenuItem>
+              </>
+            ) : (
+              <MenuItem disabled={entries.length === 0} onClick={() => (emptyTrash(), closeMenu())}>
+                Empty Trash
+              </MenuItem>
+            )
+          ) : menuEntry ? (
+            <>
+              <MenuItem onClick={() => (openItem(menuEntry), closeMenu())}>Open</MenuItem>
+              <MenuItem onClick={() => (setRenaming({ name: menuEntry.name, value: menuEntry.name }), closeMenu())}>Rename</MenuItem>
+              <MenuItem onClick={() => (setClipboard({ abs: menuEntry.abs, mode: 'copy' }), closeMenu())}>Copy</MenuItem>
+              <MenuItem onClick={() => (setClipboard({ abs: menuEntry.abs, mode: 'cut' }), closeMenu())}>Cut</MenuItem>
+              <div className={`my-1 h-px bg-white/10`} />
+              <MenuItem onClick={() => (moveToTrash(menuEntry), closeMenu())}>Move to Trash</MenuItem>
+            </>
+          ) : (
+            <>
+              <MenuItem onClick={() => (newFolder(), closeMenu())}>
+                <span className="flex items-center gap-2">
+                  <FolderPlus size={14} /> New Folder
+                </span>
+              </MenuItem>
+              <MenuItem
+                disabled={!clipboard}
+                onClick={() => (pasteClipboard(), closeMenu())}
+              >
+                <span className="flex items-center gap-2">
+                  <FilePlus size={14} /> Paste
+                </span>
+              </MenuItem>
+            </>
+          )}
+        </div>
+      )}
     </div>
+  )
+}
+
+function MenuItem({ children, onClick, disabled }: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className="w-full text-left px-3 py-2 rounded-md hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
+  )
+}
+
+function RenameInput({
+  value,
+  onChange,
+  onCommit,
+  onCancel,
+  center,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onCommit: () => void
+  onCancel: () => void
+  center?: boolean
+}) {
+  return (
+    <input
+      autoFocus
+      value={value}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit()
+        if (e.key === 'Escape') onCancel()
+      }}
+      onBlur={onCommit}
+      className={`bg-white text-black text-[12px] rounded px-1 py-0.5 w-full outline-none ring-2 ring-[var(--ubuntu-accent)] ${center ? 'text-center' : ''}`}
+    />
   )
 }

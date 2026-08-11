@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Info, MonitorCog, Image as ImageIcon, X } from 'lucide-react'
 import { useDesktop } from '../context/DesktopContext'
+import { useKernel } from '../../os/context/KernelContext'
 import { TopBar } from './TopBar'
 import { Dock } from './Dock'
 import { Window } from './Window'
@@ -171,6 +172,8 @@ function Notifications() {
 
 export function Desktop() {
   const ctx = useDesktop()
+  const { kernel } = useKernel()
+  const home = kernel.users.findByName(ctx.sessionUser ?? '')?.home ?? '/root'
 
   // global escape closes overlays
   useEffect(() => {
@@ -206,13 +209,13 @@ export function Desktop() {
           label="Home"
           icon={<HomeIcon size={44} />}
           defaultPos={{ x: 22, y: 24 }}
-          onOpen={() => ctx.openApp('files')}
+          onOpen={() => ctx.openApp('files', { path: home })}
         />
         <DesktopIcon
           label="Trash"
           icon={<TrashIcon size={44} />}
           defaultPos={{ x: 22, y: 120 }}
-          onOpen={() => ctx.openApp('files')}
+          onOpen={() => ctx.openApp('files', { path: `${home}/.local/share/Trash/files` })}
         />
       </div>
 

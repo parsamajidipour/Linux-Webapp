@@ -1,18 +1,47 @@
 import { useMemo, useState } from 'react'
-import { Save, Menu, CircleCheck } from 'lucide-react'
+import { Save, Menu, CircleCheck, AlertCircle } from 'lucide-react'
 import { useWinTheme } from '../winTheme'
+import { useDesktop } from '../context/DesktopContext'
+import { useKernel } from '../../os/context/KernelContext'
+import { basename } from '../../os/vfs/path'
 
 interface Payload {
   name?: string
+  path?: string
   content?: string
 }
 
 export function EditorApp({ payload }: { payload?: unknown }) {
   const t = useWinTheme()
+  const { kernel } = useKernel()
+  const { sessionUser } = useDesktop()
   const p = (payload ?? {}) as Payload
-  const [name] = useState(p.name ?? 'untitled.txt')
+
+  const username = sessionUser ?? 'root'
+  const home = kernel.users.findByName(username)?.home ?? '/root'
+  const actor = kernel.users.toSubject(username)
+
+  const [path, setPath] = useState(p.path ?? `${home}/Untitled Document.txt`)
+  const [name, setName] = useState(p.name ?? basename(path))
   const [text, setText] = useState(p.content ?? '')
   const [savedFlash, setSavedFlash] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // A new payload means a different file was double-clicked from Files while this window
+  // was already open (openApp() updates payload without remounting). React's recommended
+  // way to react to that is adjusting state during render, not in an effect — an effect
+  // would render once with the stale buffer, then re-render with the new one.
+  const [syncedPayload, setSyncedPayload] = useState(payload)
+  if (payload !== syncedPayload) {
+    setSyncedPayload(payload)
+    const next = payload as Payload | undefined
+    if (next?.path) {
+      setPath(next.path)
+      setName(next.name ?? basename(next.path))
+      setText(next.content ?? '')
+      setError(null)
+    }
+  }
 
   const stats = useMemo(() => {
     const lines = text === '' ? 0 : text.split('\n').length
@@ -22,12 +51,15 @@ export function EditorApp({ payload }: { payload?: unknown }) {
 
   const save = () => {
     try {
-      localStorage.setItem(`ubuntu-doc-${name}`, text)
-    } catch {
-      /* ignore */
+      if (!kernel.vfs.exists(path)) kernel.vfs.touch(path, { actor })
+      kernel.vfs.writeFile(path, text, { actor })
+      void kernel.persist()
+      setError(null)
+      setSavedFlash(true)
+      setTimeout(() => setSavedFlash(false), 1600)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
     }
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 1600)
   }
 
   return (
@@ -49,6 +81,11 @@ export function EditorApp({ payload }: { payload?: unknown }) {
           {savedFlash && (
             <span className="ml-2 inline-flex items-center gap-1 text-green-500 fade-in">
               <CircleCheck size={12} /> Saved
+            </span>
+          )}
+          {error && (
+            <span className="ml-2 inline-flex items-center gap-1 text-red-500 fade-in" title={error}>
+              <AlertCircle size={12} /> {error}
             </span>
           )}
         </span>
@@ -74,10 +111,10 @@ export function EditorApp({ payload }: { payload?: unknown }) {
       />
 
       <div className={`px-3 py-1 text-[11.5px] ${t.textDim} border-t ${t.border} flex gap-4`}>
-        <span>Ln {text.slice(0, 0).length || stats.lines}, Col 1</span>
+        <span>{stats.lines} lines</span>
         <span>{stats.words} words</span>
         <span>{stats.chars} characters</span>
-        <span className="ml-auto">Plain Text · UTF-8</span>
+        <span className="ml-auto truncate">{path} · UTF-8</span>
       </div>
     </div>
   )

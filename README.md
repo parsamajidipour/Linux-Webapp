@@ -36,7 +36,10 @@ Nothing here is faked with string templates. If you `mkdir`, the directory exist
 ## Features
 
 ### 🖥️ Desktop shell
-Boot sequence, lock screen, top bar with live clock, GNOME-style Dock, draggable/resizable windows.
+Real boot sequence (log lines come from live service state, not a script), multi-user lock screen (`authenticate()` against the real user store, wrong password actually shakes and rejects), GNOME-style top bar and Dock, notifications with a real history shade, and an Activities search that queries the live filesystem — not a hardcoded app list.
+
+### 🪟 A window manager that behaves like one
+Move, resize, snap left/right/full, **corner-drag quarter-tiling**, real chrome-less **fullscreen** (`F11`, distinct from maximize), **dynamic workspaces** (always exactly one spare, like real GNOME) with `Ctrl+Alt+←/→` to switch and a right-click menu to move a window to another one, an **Alt+Tab** switcher across every workspace, and `Super` to open Activities.
 
 ### 🗂️ Virtual filesystem
 A real inode tree seeded with a plausible Ubuntu root (`/etc`, `/var/log`, `/proc`, `/home`, ...), Unix permission bits, symlinks, and live files (`/proc/uptime`, `/proc/meminfo`) that actually update.
@@ -56,10 +59,20 @@ A real inode tree seeded with a plausible Ubuntu root (`/etc`, `/var/log`, `/pro
 | Packages | `apt apt-get dpkg` |
 | Disk | `df du mount umount lsblk` |
 | System | `uname hostname uptime date cal history alias env export` |
+| Services | `systemctl` (start/stop/status/restart/list-units — logs to `/var/log/syslog` for real) |
 | Archives | `tar zip unzip gzip gunzip` |
 | Text processing | `echo printf sort uniq cut awk sed wc` |
 
 Plus the details that make it *feel* real: persistent `~/.bash_history`, tab completion against the live filesystem and command list, `Ctrl+C`/`Ctrl+L`, colored prompt, pipes (`|`), redirects (`>`/`>>`), wildcards (`*.txt`), env-var expansion, and `$?` exit codes.
+
+### 🧰 GNOME apps, wired to the same kernel — not decoration
+Every app is a thin view over the exact same `Vfs`/`UserStore`/`ProcessManager` the terminal uses, so nothing is ever out of sync.
+
+- **Files** — real Copy/Move/Rename/Delete/New Folder, real permission errors, and a **standards-compliant Trash** (the actual freedesktop.org Trash spec: deleted files move to `~/.local/share/Trash/files` with a `.trashinfo` sidecar recording where they came from, so Restore genuinely restores them).
+- **Text Editor** — opens and saves real files on the VFS (`Ctrl+S` persists to `IndexedDB`), not `localStorage`.
+- **Settings** — Wi-Fi/Bluetooth/appearance/sound all read and write the real settings store; a **Users** page lists real accounts with real admin badges and lets you change your own password; **About** shows the live `/etc/hostname`, editable in place if you're root (same permission gate as the `hostname` command).
+- **System Monitor** — the Processes tab is the real process table (`ps aux`, live), and **End Process** really calls `kill()` — try it on a process you don't own and watch it get refused.
+- **Logs** — a `journalctl`-style viewer reading the real `/var/log/syslog`, with live tail and filtering by unit.
 
 ### 👤 Real permissions, real users
 Every file operation is checked against an actual Unix-style permission model. Regular users can't `chown`. `sudo` genuinely elevates for a single command, mirroring how `sudo` re-execs in real Linux. Password checks, sudoers group membership — all real, all enforced.
@@ -159,17 +172,27 @@ src/os/            The kernel — framework-agnostic TypeScript, zero React depe
 src/ubuntu/         The desktop UI — React components that talk to the kernel
 ```
 
-The UI never hardcodes behavior — every app (starting with Terminal) is a thin view over the same `Kernel` instance, so anything you can do in one place is consistent everywhere else.
+The UI never hardcodes behavior — every app is a thin view over the same `Kernel` instance, so anything you can do in one place is consistent everywhere else.
 
 ## Roadmap
 
 - [x] **Core OS kernel** — VFS, users/permissions, process manager, package manager, service manager, settings store
 - [x] **Real filesystem** — seeded root tree, `/proc`, `/etc`, `/var/log`
 - [x] **Terminal, fully wired** — 90+ commands, pipes/redirects/globs/env vars, persistence, tab completion
-- [ ] **Boot / Login / Desktop shell** — real multi-user login, guest sessions, dynamic wallpaper/theme, notifications, Activities search
-- [ ] **Window manager polish** — quarter-tiling, workspaces, Alt+Tab, Super key
-- [ ] **GNOME apps wired to the kernel** — Files, Text Editor, Calculator, Settings, System Monitor
-- [ ] **Final realism & performance pass**
+- [x] **Boot / Login / Desktop shell** — real multi-user login, guest sessions, dynamic wallpaper/theme, notifications, Activities search
+- [x] **Window manager polish** — quarter-tiling, real fullscreen, dynamic workspaces, Alt+Tab, Super key
+- [x] **GNOME apps wired to the kernel** — Files (with a spec-compliant Trash), Text Editor, Calculator, Settings, System Monitor, plus a new Logs app
+- [x] **Final realism & performance pass**
+
+### Known limitations
+
+Honest gaps, not bugs — each is a deliberate scope boundary, not an oversight:
+
+- No `useradd`/Add-User flow yet — `UserStore` can add a user record but has no matching `addGroup`, so a new account wouldn't get a real personal group. Change-password and listing existing accounts work today.
+- `ProcessManager` assigns CPU/Memory once at spawn time rather than sampling live, so System Monitor's headline numbers are a real aggregate but the historical graph wiggle is cosmetic.
+- No real network stack — `ping`/`curl`/`ip`/etc. are deterministic and consistent (same domain always resolves to the same fake IP, real services show up in `ss`), but there's no actual traffic.
+- `ln` supports symlinks only; hard links are rejected with an explicit error rather than faked, since the VFS has no shared-inode concept.
+- `awk`/`sed` implement a real but minimal subset (`{print $1,$2}`, `-F`, `NR` / `s/pattern/repl/g`, `Nd`) — anything fancier fails loudly instead of silently doing the wrong thing.
 
 ## Contributing
 

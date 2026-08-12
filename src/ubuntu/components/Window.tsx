@@ -18,10 +18,41 @@ export function Window({ win }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [hintVisible, setHintVisible] = useState(true)
+  // Re-show the "press Esc" hint each time fullscreen is (re-)entered — adjusted during
+  // render (React's recommended pattern for "reset state when a prop changes") rather than
+  // as a synchronous setState in an effect.
+  const [prevFullscreen, setPrevFullscreen] = useState(win.fullscreen)
+  if (win.fullscreen !== prevFullscreen) {
+    setPrevFullscreen(win.fullscreen)
+    if (win.fullscreen) setHintVisible(true)
+  }
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true))
   }, [])
+
+  // F11 toggles real chrome-less fullscreen for whichever window is focused; Esc only exits
+  // it (never closes the window), mirroring how a real DE treats fullscreen apps.
+  useEffect(() => {
+    if (!isActive) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault()
+        ctx.toggleFullscreen(win.id)
+      } else if (e.key === 'Escape' && win.fullscreen) {
+        ctx.toggleFullscreen(win.id)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isActive, win.id, win.fullscreen, ctx])
+
+  useEffect(() => {
+    if (!win.fullscreen) return
+    const t = setTimeout(() => setHintVisible(false), 2200)
+    return () => clearTimeout(t)
+  }, [win.fullscreen])
 
   const minW = app.minSize?.w ?? 320
   const minH = app.minSize?.h ?? 240
@@ -31,16 +62,28 @@ export function Window({ win }: Props) {
   const geo = (() => {
     const vw = window.innerWidth
     const vh = window.innerHeight
-    if (win.snap === 'full') {
-      return { x: 0, y: TOPBAR_H, w: vw, h: vh - TOPBAR_H }
+    if (win.fullscreen) {
+      return { x: 0, y: 0, w: vw, h: vh }
     }
-    if (win.snap === 'left') {
-      return { x: 0, y: TOPBAR_H, w: vw / 2, h: vh - TOPBAR_H }
+    const halfH = (vh - TOPBAR_H) / 2
+    switch (win.snap) {
+      case 'full':
+        return { x: 0, y: TOPBAR_H, w: vw, h: vh - TOPBAR_H }
+      case 'left':
+        return { x: 0, y: TOPBAR_H, w: vw / 2, h: vh - TOPBAR_H }
+      case 'right':
+        return { x: vw / 2, y: TOPBAR_H, w: vw / 2, h: vh - TOPBAR_H }
+      case 'tl':
+        return { x: 0, y: TOPBAR_H, w: vw / 2, h: halfH }
+      case 'tr':
+        return { x: vw / 2, y: TOPBAR_H, w: vw / 2, h: halfH }
+      case 'bl':
+        return { x: 0, y: TOPBAR_H + halfH, w: vw / 2, h: halfH }
+      case 'br':
+        return { x: vw / 2, y: TOPBAR_H + halfH, w: vw / 2, h: halfH }
+      default:
+        return { x: win.x, y: win.y, w: win.w, h: win.h }
     }
-    if (win.snap === 'right') {
-      return { x: vw / 2, y: TOPBAR_H, w: vw / 2, h: vh - TOPBAR_H }
-    }
-    return { x: win.x, y: win.y, w: win.w, h: win.h }
   })()
 
   /* ---------- drag ---------- */
@@ -85,13 +128,31 @@ export function Window({ win }: Props) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       if (!moved) return
-      // edge snapping
+      // edge/corner snapping — corners (a generous hit zone in both axes) win over a plain
+      // edge, so dragging into a corner quarter-tiles instead of just going full-height.
       const vw = window.innerWidth
-      if (ev.clientY <= 6) {
+      const vh = window.innerHeight
+      const CORNER = 80
+      const nearTop = ev.clientY <= CORNER
+      const nearBottom = ev.clientY >= vh - CORNER
+      const nearLeft = ev.clientX <= 6
+      const nearLeftCorner = ev.clientX <= CORNER
+      const nearRight = ev.clientX >= vw - 6
+      const nearRightCorner = ev.clientX >= vw - CORNER
+
+      if (nearTop && nearLeftCorner) {
+        ctx.snapWindow(win.id, 'tl')
+      } else if (nearTop && nearRightCorner) {
+        ctx.snapWindow(win.id, 'tr')
+      } else if (nearBottom && nearLeftCorner) {
+        ctx.snapWindow(win.id, 'bl')
+      } else if (nearBottom && nearRightCorner) {
+        ctx.snapWindow(win.id, 'br')
+      } else if (ev.clientY <= 6) {
         ctx.snapWindow(win.id, 'full')
-      } else if (ev.clientX <= 6) {
+      } else if (nearLeft) {
         ctx.snapWindow(win.id, 'left')
-      } else if (ev.clientX >= vw - 6) {
+      } else if (nearRight) {
         ctx.snapWindow(win.id, 'right')
       } else {
         // clamp into view
@@ -147,6 +208,14 @@ export function Window({ win }: Props) {
     ctx.toggleMaximize(win.id)
   }, [ctx, win.id])
 
+  const [titleMenu, setTitleMenu] = useState<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    if (!titleMenu) return
+    const close = () => setTitleMenu(null)
+    window.addEventListener('pointerdown', close)
+    return () => window.removeEventListener('pointerdown', close)
+  }, [titleMenu])
+
   if (win.minimized) {
     return (
       <div
@@ -156,6 +225,25 @@ export function Window({ win }: Props) {
         <WindowChrome win={win} isActive={false} dark={ctx.darkStyle} title={app.name}>
           <div className="h-full" />
         </WindowChrome>
+      </div>
+    )
+  }
+
+  if (win.fullscreen) {
+    return (
+      <div
+        className="fixed inset-0 bg-black z-[650]"
+        onPointerDown={() => ctx.focusWindow(win.id)}
+      >
+        <div className="w-full h-full">
+          <AppComp payload={win.payload} />
+        </div>
+        <div
+          className="fixed top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full popover-glass text-white text-[12px] pointer-events-none transition-opacity duration-500"
+          style={{ opacity: hintVisible ? 1 : 0 }}
+        >
+          Press Esc or F11 to exit fullscreen
+        </div>
       </div>
     )
   }
@@ -195,12 +283,43 @@ export function Window({ win }: Props) {
         snapped={snapped}
         onTitlePointerDown={onTitlePointerDown}
         onTitleDoubleClick={handleDoubleClick}
+        onTitleContextMenu={(e) => {
+          e.preventDefault()
+          setTitleMenu({ x: Math.min(e.clientX, window.innerWidth - 220), y: e.clientY })
+        }}
         onClose={() => ctx.closeWindow(win.id)}
         onMinimize={() => ctx.minimizeWindow(win.id)}
         onMaximize={() => ctx.toggleMaximize(win.id)}
       >
         <AppComp payload={win.payload} />
       </WindowChrome>
+      {titleMenu && (
+        <div
+          className="fixed z-[800] popover-glass rounded-lg p-1 w-52 text-white text-[13px] slide-up"
+          style={{ left: titleMenu.x, top: titleMenu.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => (ctx.toggleFullscreen(win.id), setTitleMenu(null))}
+            className="w-full text-left px-3 py-2 rounded-md hover:bg-white/10"
+          >
+            {win.fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+          </button>
+          <div className="my-1 h-px bg-white/10" />
+          <div className="px-3 py-1 text-[11px] text-neutral-400">Move to Workspace</div>
+          {Array.from({ length: ctx.workspaceCount }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              disabled={n === win.workspace}
+              onClick={() => (ctx.moveWindowToWorkspace(win.id, n), ctx.setCurrentWorkspace(n), setTitleMenu(null))}
+              className="w-full text-left px-3 py-2 rounded-md hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Workspace {n}
+              {n === win.workspace ? ' (current)' : ''}
+            </button>
+          ))}
+        </div>
+      )}
       {!snapped &&
         resizeHandles.map((h) => (
           <div
@@ -224,6 +343,7 @@ function WindowChrome({
   snapped = false,
   onTitlePointerDown,
   onTitleDoubleClick,
+  onTitleContextMenu,
   onClose,
   onMinimize,
   onMaximize,
@@ -236,6 +356,7 @@ function WindowChrome({
   snapped?: boolean
   onTitlePointerDown?: (e: React.PointerEvent) => void
   onTitleDoubleClick?: () => void
+  onTitleContextMenu?: (e: React.MouseEvent) => void
   onClose?: () => void
   onMinimize?: () => void
   onMaximize?: () => void
@@ -269,6 +390,7 @@ function WindowChrome({
         className={`h-10 shrink-0 flex items-center px-2.5 gap-2 select-none ${titleBg}`}
         onPointerDown={onTitlePointerDown}
         onDoubleClick={onTitleDoubleClick}
+        onContextMenu={onTitleContextMenu}
         style={{ cursor: snapped ? 'default' : 'grab', touchAction: 'none' }}
       >
         {/* Yaru window controls — left side like Ubuntu */}

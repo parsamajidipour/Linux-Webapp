@@ -44,9 +44,17 @@ interface DesktopCtx {
   focusWindow: (id: string) => void
   minimizeWindow: (id: string) => void
   toggleMaximize: (id: string) => void
+  toggleFullscreen: (id: string) => void
   updateWindow: (id: string, patch: Partial<WindowState>) => void
   snapWindow: (id: string, snap: SnapState) => void
   activeWindowId: string | null
+  // workspaces
+  /** 1-based. Dynamic like real GNOME: there's always exactly one empty workspace past the
+   * highest one in use (up to `MAX_WORKSPACES`), so a fresh one appears as soon as you need it. */
+  currentWorkspace: number
+  setCurrentWorkspace: (n: number) => void
+  workspaceCount: number
+  moveWindowToWorkspace: (id: string, workspace: number) => void
   // overlays
   overviewOpen: boolean
   setOverviewOpen: (v: boolean) => void
@@ -90,6 +98,8 @@ const Ctx = createContext<DesktopCtx | null>(null)
 let winSeq = 0
 let notifSeq = 0
 
+const MAX_WORKSPACES = 8
+
 export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const { kernel } = useKernel()
   const [power, setPower] = useState<PowerState>('boot')
@@ -98,6 +108,7 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
   const [windows, setWindows] = useState<WindowState[]>([])
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [appGridOpen, setAppGridOpen] = useState(false)
+  const [currentWorkspace, setCurrentWorkspace] = useState(1)
 
   // Desktop prefs mirror kernel.settings (SettingsStore, IndexedDB-backed) so they survive a
   // reload instead of living only in React state. `settings` is the one source of truth;
@@ -175,39 +186,47 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
-  const openApp = useCallback((appId: string, payload?: unknown) => {
-    setOverviewOpen(false)
-    setAppGridOpen(false)
-    setWindows((prev) => {
-      const existing = prev.find((w) => w.appId === appId)
-      if (existing) {
-        return prev.map((w) =>
-          w.id === existing.id
-            ? { ...w, minimized: false, z: ++zCounter.current, payload: payload ?? w.payload }
-            : w,
-        )
-      }
-      const n = prev.length
-      return [
-        ...prev,
-        {
-          id: `win-${++winSeq}`,
-          appId,
-          title: appId,
-          x: 140 + (n % 5) * 44,
-          y: 64 + (n % 5) * 36,
-          w: 860,
-          h: 560,
-          z: ++zCounter.current,
-          minimized: false,
-          snap: null,
-          prevBounds: null,
-          closing: false,
-          payload,
-        },
-      ]
-    })
-  }, [])
+  const openApp = useCallback(
+    (appId: string, payload?: unknown) => {
+      setOverviewOpen(false)
+      setAppGridOpen(false)
+      setWindows((prev) => {
+        const existing = prev.find((w) => w.appId === appId)
+        if (existing) {
+          // Reopening an app already running elsewhere jumps you to its workspace,
+          // instead of silently focusing a window you can't see.
+          setCurrentWorkspace(existing.workspace)
+          return prev.map((w) =>
+            w.id === existing.id
+              ? { ...w, minimized: false, z: ++zCounter.current, payload: payload ?? w.payload }
+              : w,
+          )
+        }
+        const n = prev.length
+        return [
+          ...prev,
+          {
+            id: `win-${++winSeq}`,
+            appId,
+            title: appId,
+            x: 140 + (n % 5) * 44,
+            y: 64 + (n % 5) * 36,
+            w: 860,
+            h: 560,
+            z: ++zCounter.current,
+            minimized: false,
+            snap: null,
+            prevBounds: null,
+            closing: false,
+            payload,
+            fullscreen: false,
+            workspace: currentWorkspace,
+          },
+        ]
+      })
+    },
+    [currentWorkspace],
+  )
 
   const closeWindow = useCallback((id: string) => {
     setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, closing: true } : w)))
@@ -252,11 +271,20 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
         if (w.snap === snap) return w
         return {
           ...w,
+          fullscreen: false,
           snap,
           prevBounds: w.prevBounds ?? { x: w.x, y: w.y, w: w.w, h: w.h },
         }
       }),
     )
+  }, [])
+
+  const toggleFullscreen = useCallback((id: string) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, fullscreen: !w.fullscreen } : w)))
+  }, [])
+
+  const moveWindowToWorkspace = useCallback((id: string, workspace: number) => {
+    setWindows((prev) => prev.map((w) => (w.id === id ? { ...w, workspace } : w)))
   }, [])
 
   const unlock = useCallback((username: string) => {
@@ -266,11 +294,19 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => setSessionUser(null), [])
 
+  // Dynamic workspaces, same feel as real GNOME: always exactly one more than the highest
+  // one anything actually lives on (or the one you're looking at), capped so Alt+Tab-ing
+  // through workspaces can't run away.
+  const workspaceCount = useMemo(() => {
+    const highestUsed = windows.reduce((max, w) => Math.max(max, w.workspace), 1)
+    return Math.min(MAX_WORKSPACES, Math.max(highestUsed, currentWorkspace) + 1)
+  }, [windows, currentWorkspace])
+
   const activeWindowId = useMemo(() => {
-    const visible = windows.filter((w) => !w.minimized && !w.closing)
+    const visible = windows.filter((w) => !w.minimized && !w.closing && w.workspace === currentWorkspace)
     if (!visible.length) return null
     return visible.reduce((a, b) => (a.z > b.z ? a : b)).id
-  }, [windows])
+  }, [windows, currentWorkspace])
 
   const value: DesktopCtx = {
     power,
@@ -286,9 +322,14 @@ export function DesktopProvider({ children }: { children: React.ReactNode }) {
     focusWindow,
     minimizeWindow,
     toggleMaximize,
+    toggleFullscreen,
     updateWindow,
     snapWindow,
     activeWindowId,
+    currentWorkspace,
+    setCurrentWorkspace,
+    workspaceCount,
+    moveWindowToWorkspace,
     overviewOpen,
     setOverviewOpen,
     appGridOpen,

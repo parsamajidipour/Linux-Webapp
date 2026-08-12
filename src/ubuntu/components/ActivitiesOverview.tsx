@@ -83,7 +83,9 @@ export function ActivitiesOverview() {
 
   if (!ctx.overviewOpen) return null
 
-  const openWins = ctx.windows.filter((w) => !w.closing)
+  // Real GNOME scopes the overview's window cards to the workspace you're currently on —
+  // switching workspace (via the dots below) shows that workspace's own windows.
+  const openWins = ctx.windows.filter((w) => !w.closing && w.workspace === ctx.currentWorkspace)
 
   return (
     <div
@@ -212,10 +214,20 @@ export function ActivitiesOverview() {
         )}
       </div>
 
-      {/* workspace hint */}
-      <div className="pb-8 flex justify-center gap-2">
-        <div className="h-1.5 w-6 rounded-full" style={{ background: 'var(--ubuntu-accent)' }} />
-        <div className="h-1.5 w-1.5 rounded-full bg-white/40" />
+      {/* workspace switcher */}
+      <div className="pb-8 flex justify-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {Array.from({ length: ctx.workspaceCount }, (_, i) => i + 1).map((n) => (
+          <button
+            key={n}
+            onClick={() => ctx.setCurrentWorkspace(n)}
+            title={`Workspace ${n}`}
+            className="h-1.5 rounded-full transition-all"
+            style={{
+              width: n === ctx.currentWorkspace ? 24 : 6,
+              background: n === ctx.currentWorkspace ? 'var(--ubuntu-accent)' : 'rgba(255,255,255,0.4)',
+            }}
+          />
+        ))}
       </div>
     </div>
   )

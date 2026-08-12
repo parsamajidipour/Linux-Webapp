@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type SnapState = 'left' | 'right' | 'full' | null
+export type SnapState = 'left' | 'right' | 'full' | 'tl' | 'tr' | 'bl' | 'br' | null
 
 export interface WindowState {
   id: string
@@ -16,6 +16,11 @@ export interface WindowState {
   prevBounds: { x: number; y: number; w: number; h: number } | null
   closing: boolean
   payload?: unknown
+  /** Chrome-less true fullscreen (F11) — distinct from Maximize (`snap: 'full'`), which keeps
+   * the title bar. Covers the entire viewport, including over the TopBar. */
+  fullscreen: boolean
+  /** 1-based workspace this window lives on. */
+  workspace: number
 }
 
 export interface AppDef {

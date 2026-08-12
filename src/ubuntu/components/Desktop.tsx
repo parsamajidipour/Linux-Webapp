@@ -7,6 +7,7 @@ import { Dock } from './Dock'
 import { Window } from './Window'
 import { ActivitiesOverview } from './ActivitiesOverview'
 import { AppGrid } from './AppGrid'
+import { AltTabSwitcher } from './AltTabSwitcher'
 import { HomeIcon, TrashIcon, UbuntuLogo } from '../icons'
 
 function WallpaperDecor({ id }: { id: string }) {
@@ -175,18 +176,28 @@ export function Desktop() {
   const { kernel } = useKernel()
   const home = kernel.users.findByName(ctx.sessionUser ?? '')?.home ?? '/root'
 
-  // global escape closes overlays
+  // global escape closes overlays; Super opens Activities; Ctrl+Alt+Left/Right switches
+  // workspace — all real GNOME defaults.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         ctx.setOverviewOpen(false)
         ctx.setAppGridOpen(false)
+      } else if (e.key === 'Meta' || e.key === 'OS') {
+        e.preventDefault()
+        ctx.setOverviewOpen(!ctx.overviewOpen)
+      } else if (e.ctrlKey && e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        ctx.setCurrentWorkspace(Math.min(ctx.workspaceCount, ctx.currentWorkspace + 1))
+      } else if (e.ctrlKey && e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        ctx.setCurrentWorkspace(Math.max(1, ctx.currentWorkspace - 1))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [ctx.overviewOpen, ctx.currentWorkspace, ctx.workspaceCount])
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-black">
@@ -219,16 +230,19 @@ export function Desktop() {
         />
       </div>
 
-      {/* windows */}
-      {ctx.windows.map((w) => (
-        <Window key={w.id} win={w} />
-      ))}
+      {/* windows — only this workspace's, like real GNOME workspaces */}
+      {ctx.windows
+        .filter((w) => w.workspace === ctx.currentWorkspace)
+        .map((w) => (
+          <Window key={w.id} win={w} />
+        ))}
 
       {/* shell */}
       <Dock />
       <TopBar />
       <ActivitiesOverview />
       <AppGrid />
+      <AltTabSwitcher />
       <ContextMenu />
       <Notifications />
 

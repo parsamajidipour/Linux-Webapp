@@ -114,8 +114,15 @@ export function TopBar() {
     const onDown = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen('none')
     }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen('none')
+    }
     window.addEventListener('pointerdown', onDown)
-    return () => window.removeEventListener('pointerdown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('keydown', onKey)
+    }
   }, [])
 
   const activeWin = ctx.windows.find((w) => w.id === ctx.activeWindowId)
@@ -152,6 +159,7 @@ export function TopBar() {
         onClick={() => {
           ctx.setOverviewOpen(!ctx.overviewOpen)
           ctx.setAppGridOpen(false)
+          setOpen('none')
         }}
         className={`px-2.5 py-0.5 rounded-md font-medium text-shadow-panel transition-colors ${
           ctx.overviewOpen ? 'bg-white/15' : 'hover:bg-white/10'

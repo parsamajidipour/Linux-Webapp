@@ -11,9 +11,14 @@ import {
   HardDrive,
   MemoryStick,
   MonitorSmartphone,
+  Users as UsersIcon,
+  Pencil,
+  ShieldCheck,
+  User,
 } from 'lucide-react'
 import { useDesktop, ACCENTS } from '../context/DesktopContext'
 import { useWinTheme } from '../winTheme'
+import { useKernel } from '../../os/context/KernelContext'
 import { UbuntuLogo } from '../icons'
 import type { WallpaperId } from '../types'
 
@@ -72,6 +77,148 @@ function Page({ title, children }: { title: string; children: React.ReactNode })
   )
 }
 
+/** Reads/writes the real `/etc/hostname` — the same file `hostname`/`uname -a` read in Terminal.
+ * Only root can rename the host (matches the exact gate the `hostname` shell command enforces). */
+function HostnameField() {
+  const { kernel } = useKernel()
+  const { sessionUser, pushNotification } = useDesktop()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const canEdit = sessionUser === 'root'
+
+  const hostname = (() => {
+    try {
+      return kernel.vfs.readFile('/etc/hostname').trim()
+    } catch {
+      return 'ubuntu'
+    }
+  })()
+
+  const commit = () => {
+    const next = value.trim()
+    setEditing(false)
+    if (!next || next === hostname) return
+    kernel.vfs.writeFile('/etc/hostname', `${next}\n`, { actor: kernel.users.toSubject(sessionUser ?? '') })
+    void kernel.persist()
+    pushNotification({ app: 'Settings', title: 'Hostname changed', body: `This device is now known as "${next}".` })
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className="text-[19px] font-bold bg-transparent border-b border-[var(--ubuntu-accent)] outline-none w-56"
+      />
+    )
+  }
+  return (
+    <button
+      className="text-[19px] font-bold flex items-center gap-1.5 group"
+      disabled={!canEdit}
+      onClick={() => {
+        setValue(hostname)
+        setEditing(true)
+      }}
+      title={canEdit ? 'Click to rename this device' : 'Only root can change the hostname'}
+    >
+      {hostname}
+      {canEdit && <Pencil size={13} className="opacity-0 group-hover:opacity-60 transition-opacity" />}
+    </button>
+  )
+}
+
+function UsersPage() {
+  const t = useWinTheme()
+  const { kernel } = useKernel()
+  const { sessionUser, pushNotification } = useDesktop()
+  const [pwUser, setPwUser] = useState<string | null>(null)
+  const [pw, setPw] = useState('')
+
+  const users = kernel.users.list()
+
+  const changePassword = () => {
+    if (!pwUser || !pw.trim()) return
+    kernel.users.setPassword(pwUser, pw.trim())
+    void kernel.persist()
+    pushNotification({ app: 'Settings', title: 'Password changed', body: `Password updated for ${pwUser}.` })
+    setPwUser(null)
+    setPw('')
+  }
+
+  return (
+    <Page title="Users">
+      {users.map((u) => {
+        const admin = kernel.users.isSudoer(u.username)
+        const isSelf = u.username === sessionUser
+        return (
+          <div key={u.username} className={`px-5 py-4 border-b ${t.border}`}>
+            <div className="flex items-center gap-4">
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+                style={{ background: u.passwordHash === null ? 'linear-gradient(160deg,#5c5c5c,#2c2c2c)' : 'linear-gradient(160deg,#8a6f95,#5e2750)' }}
+              >
+                <User size={22} color="#fff" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-medium flex items-center gap-2">
+                  {u.fullName}
+                  {isSelf && <span className={`text-[11px] ${t.textDim}`}>(this account)</span>}
+                </div>
+                <div className={`text-[12px] ${t.textDim} flex items-center gap-3`}>
+                  <span>{u.username}</span>
+                  <span className="flex items-center gap-1">
+                    {admin ? <ShieldCheck size={12} style={{ color: 'var(--ubuntu-accent)' }} /> : null}
+                    {admin ? 'Administrator' : 'Standard'}
+                  </span>
+                  <span>uid {u.uid}</span>
+                </div>
+              </div>
+              {isSelf && u.passwordHash !== null && (
+                <button
+                  onClick={() => (setPwUser(u.username), setPw(''))}
+                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium ${t.hover} border ${t.border}`}
+                >
+                  Change Password
+                </button>
+              )}
+            </div>
+            {pwUser === u.username && (
+              <div className="flex items-center gap-2 mt-3">
+                <input
+                  type="password"
+                  autoFocus
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && changePassword()}
+                  placeholder="New password"
+                  className={`text-[13px] rounded-md border px-2.5 py-1.5 outline-none flex-1 ${t.border} ${t.input}`}
+                />
+                <button
+                  onClick={changePassword}
+                  className="px-3 py-1.5 rounded-md text-[12px] font-medium text-white"
+                  style={{ background: 'var(--ubuntu-accent)' }}
+                >
+                  Save
+                </button>
+                <button onClick={() => setPwUser(null)} className={`px-3 py-1.5 rounded-md text-[12px] ${t.hover}`}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </Page>
+  )
+}
+
 export function SettingsApp() {
   const t = useWinTheme()
   const ctx = useDesktop()
@@ -83,6 +230,7 @@ export function SettingsApp() {
     { id: 'bluetooth', label: 'Bluetooth', icon: Bluetooth },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'sound', label: 'Sound', icon: Volume2 },
+    { id: 'users', label: 'Users', icon: UsersIcon },
     { id: 'about', label: 'About', icon: Info },
   ]
 
@@ -243,12 +391,14 @@ export function SettingsApp() {
         </Page>
       )}
 
+      {page === 'users' && <UsersPage />}
+
       {page === 'about' && (
         <Page title="About">
           <div className={`px-5 py-6 flex items-center gap-5 border-b ${t.border}`}>
             <UbuntuLogo size={72} />
             <div>
-              <div className="text-[19px] font-bold">kimi-ubuntu</div>
+              <HostnameField />
               <div className={`text-[13px] ${t.textDim}`}>Ubuntu 24.04.2 LTS “Noble Numbat”</div>
               <button
                 onClick={() =>

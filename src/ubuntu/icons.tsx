@@ -11,6 +11,7 @@ import {
   Home,
   Trash2,
   Search,
+  ScrollText,
 } from 'lucide-react'
 
 /** Ubuntu "Circle of Friends" logo */
@@ -133,6 +134,14 @@ export function TrashIcon({ size = 40, className }: TileProps) {
   return (
     <Tile size={size} className={className} bg="linear-gradient(180deg,#8a8a82 0%,#63635c 100%)">
       <Trash2 size={size * 0.55} color="#f6f5f4" strokeWidth={1.8} />
+    </Tile>
+  )
+}
+
+export function LogsIcon({ size = 40, className }: TileProps) {
+  return (
+    <Tile size={size} className={className} bg="linear-gradient(180deg,#3d4a5a 0%,#1f2833 100%)">
+      <ScrollText size={size * 0.52} color="#8ec4f6" strokeWidth={1.8} />
     </Tile>
   )
 }

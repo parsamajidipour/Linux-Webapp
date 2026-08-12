@@ -8,6 +8,42 @@ function format(n: number): string {
   return s.length > 12 ? String(parseFloat(n.toPrecision(10))) : s
 }
 
+function Btn({
+  label,
+  onClick,
+  variant = 'num',
+  span = false,
+}: {
+  label: React.ReactNode
+  onClick: () => void
+  variant?: 'num' | 'op' | 'fn' | 'eq'
+  span?: boolean
+}) {
+  const base = 'cal-btn h-14 rounded-xl text-[19px] font-medium flex items-center justify-center select-none'
+  const styles = {
+    num: 'bg-[#454540] hover:bg-[#52524c] text-white',
+    fn: 'bg-[#383834] hover:bg-[#444440] text-neutral-300 text-[16px]',
+    op: 'text-white text-[22px]',
+    eq: 'text-white text-[22px]',
+  }
+  const style = variant === 'op' || variant === 'eq' ? { background: 'var(--ubuntu-accent)' } : undefined
+  return (
+    <button
+      className={`${base} ${styles[variant]} ${span ? 'col-span-2' : ''}`}
+      style={style}
+      onMouseEnter={(e) => {
+        if (variant === 'op' || variant === 'eq') e.currentTarget.style.background = 'var(--ubuntu-accent-hover)'
+      }}
+      onMouseLeave={(e) => {
+        if (variant === 'op' || variant === 'eq') e.currentTarget.style.background = 'var(--ubuntu-accent)'
+      }}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function CalculatorApp() {
   const [display, setDisplay] = useState('0')
   const [expr, setExpr] = useState('')
@@ -114,47 +150,6 @@ export function CalculatorApp() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [inputDigit, pressOp, equals, backspace, clearAll])
-
-  const Btn = ({
-    label,
-    onClick,
-    variant = 'num',
-    span = false,
-  }: {
-    label: React.ReactNode
-    onClick: () => void
-    variant?: 'num' | 'op' | 'fn' | 'eq'
-    span?: boolean
-  }) => {
-    const base = 'cal-btn h-14 rounded-xl text-[19px] font-medium flex items-center justify-center select-none'
-    const styles = {
-      num: 'bg-[#454540] hover:bg-[#52524c] text-white',
-      fn: 'bg-[#383834] hover:bg-[#444440] text-neutral-300 text-[16px]',
-      op: 'text-white text-[22px]',
-      eq: 'text-white text-[22px]',
-    }
-    const style =
-      variant === 'op' || variant === 'eq'
-        ? { background: 'var(--ubuntu-accent)' }
-        : undefined
-    return (
-      <button
-        className={`${base} ${styles[variant]} ${span ? 'col-span-2' : ''}`}
-        style={style}
-        onMouseEnter={(e) => {
-          if (variant === 'op' || variant === 'eq')
-            e.currentTarget.style.background = 'var(--ubuntu-accent-hover)'
-        }}
-        onMouseLeave={(e) => {
-          if (variant === 'op' || variant === 'eq')
-            e.currentTarget.style.background = 'var(--ubuntu-accent)'
-        }}
-        onClick={onClick}
-      >
-        {label}
-      </button>
-    )
-  }
 
   return (
     <div className="flex flex-col h-full bg-[#2c2c28] p-3 gap-2">

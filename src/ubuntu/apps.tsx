@@ -4,6 +4,7 @@ import {
   CalculatorIcon,
   EditorIcon,
   FilesIcon,
+  LogsIcon,
   MonitorIcon,
   SettingsIconTile,
   TerminalIcon,
@@ -15,6 +16,7 @@ import { CalculatorApp } from './apps/CalculatorApp'
 import { SettingsApp } from './apps/SettingsApp'
 import { AppCenterApp } from './apps/AppCenterApp'
 import { SysMonitorApp } from './apps/SysMonitorApp'
+import { LogsApp } from './apps/LogsApp'
 import type { ComponentType } from 'react'
 
 export const APP_COMPONENTS: Record<string, ComponentType<{ payload?: unknown }>> = {
@@ -25,6 +27,7 @@ export const APP_COMPONENTS: Record<string, ComponentType<{ payload?: unknown }>
   settings: SettingsApp,
   'app-center': AppCenterApp,
   'sys-monitor': SysMonitorApp,
+  logs: LogsApp,
 }
 
 export const APPS: AppDef[] = [
@@ -83,6 +86,14 @@ export const APPS: AppDef[] = [
     icon: <SettingsIconTile size={40} />,
     defaultSize: { w: 900, h: 580 },
     minSize: { w: 640, h: 440 },
+  },
+  {
+    id: 'logs',
+    name: 'Logs',
+    color: '#1f2833',
+    icon: <LogsIcon size={40} />,
+    defaultSize: { w: 820, h: 540 },
+    minSize: { w: 560, h: 360 },
   },
 ]
 
